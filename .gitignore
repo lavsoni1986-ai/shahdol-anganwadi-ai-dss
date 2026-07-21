@@ -1,0 +1,10 @@
+venv/
+.venv/
+**pycache**/
+*.pyc
+.env
+data/*.db
+data/*.sqlite
+.vscode/
+.idea/
+vc_redist.x64.exe

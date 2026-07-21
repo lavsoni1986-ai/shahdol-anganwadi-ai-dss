@@ -1,0 +1,222 @@
+{
+  "registered_workers": [
+    {
+      "phone": "919876543210",
+      "name": "श्रीमती सुनीता देवी",
+      "role": "AWC Worker",
+      "awc_id": "AWC-SHA-1042",
+      "center_name": "रामपुर",
+      "block_name": "सोहागपुर",
+      "district": "Shahdol",
+      "state": "Madhya Pradesh",
+      "gps_lat": 23.2841,
+      "gps_lon": 81.3862,
+      "active": true,
+      "joined_date": "2024-01-15"
+    },
+    {
+      "phone": "919845678901",
+      "name": "श्रीमती पुष्पा बाई",
+      "role": "AWC Helper",
+      "awc_id": "AWC-SHA-1042",
+      "center_name": "रामपुर",
+      "block_name": "सोहागपुर",
+      "district": "Shahdol",
+      "state": "Madhya Pradesh",
+      "gps_lat": 23.2841,
+      "gps_lon": 81.3862,
+      "active": true,
+      "joined_date": "2024-03-01"
+    },
+    {
+      "phone": "917654321098",
+      "name": "श्रीमती रेखा सिंह",
+      "role": "AWC Supervisor",
+      "awc_id": "AWC-SHA-1042",
+      "center_name": "रामपुर",
+      "block_name": "सोहागपुर",
+      "district": "Shahdol",
+      "state": "Madhya Pradesh",
+      "gps_lat": 23.2841,
+      "gps_lon": 81.3862,
+      "active": true,
+      "joined_date": "2023-06-10"
+    },
+    {
+      "phone": "918765432109",
+      "name": "श्रीमती गीता राजपूत",
+      "role": "AWC Worker",
+      "awc_id": "AWC-SHA-1084",
+      "center_name": "पोड़ी",
+      "block_name": "सोहागपुर",
+      "district": "Shahdol",
+      "state": "Madhya Pradesh",
+      "gps_lat": 23.3105,
+      "gps_lon": 81.4230,
+      "active": true,
+      "joined_date": "2024-02-20"
+    },
+    {
+      "phone": "919123456780",
+      "name": "श्रीमती कमला यादव",
+      "role": "AWC Worker",
+      "awc_id": "AWC-SHA-1120",
+      "center_name": "खन्नौधी",
+      "block_name": "जयसिंहनगर",
+      "district": "Shahdol",
+      "state": "Madhya Pradesh",
+      "gps_lat": 23.5612,
+      "gps_lon": 81.2475,
+      "active": true,
+      "joined_date": "2023-11-05"
+    },
+    {
+      "phone": "919988776655",
+      "name": "श्रीमती अनीता विश्वकर्मा",
+      "role": "AWC Worker",
+      "awc_id": "AWC-SHA-1012",
+      "center_name": "विचारपुर",
+      "block_name": "सोहागपुर",
+      "district": "Shahdol",
+      "state": "Madhya Pradesh",
+      "gps_lat": 23.2210,
+      "gps_lon": 81.3540,
+      "active": true,
+      "joined_date": "2024-04-10"
+    },
+    {
+      "phone": "917766554433",
+      "name": "श्रीमती मीना कोल",
+      "role": "AWC Worker",
+      "awc_id": "AWC-SHA-1001",
+      "center_name": "सोहागपुर नगर",
+      "block_name": "सोहागपुर",
+      "district": "Shahdol",
+      "state": "Madhya Pradesh",
+      "gps_lat": 23.1930,
+      "gps_lon": 81.4100,
+      "active": true,
+      "joined_date": "2023-08-22"
+    },
+    {
+      "phone": "916655443322",
+      "name": "श्रीमती सरस्वती पटेल",
+      "role": "AWC Worker",
+      "awc_id": "AWC-SHA-1203",
+      "center_name": "बहेरा टोला",
+      "block_name": "ब्योहारी",
+      "district": "Shahdol",
+      "state": "Madhya Pradesh",
+      "gps_lat": 23.9821,
+      "gps_lon": 81.4450,
+      "active": true,
+      "joined_date": "2024-01-30"
+    },
+    {
+      "phone": "915544332211",
+      "name": "श्रीमती लक्ष्मी बाई तिवारी",
+      "role": "AWC Worker",
+      "awc_id": "AWC-SHA-1310",
+      "center_name": "गोहपारू ग्राम",
+      "block_name": "गोहपारू",
+      "district": "Shahdol",
+      "state": "Madhya Pradesh",
+      "gps_lat": 23.4015,
+      "gps_lon": 81.3205,
+      "active": true,
+      "joined_date": "2024-05-15"
+    },
+    {
+      "phone": "914433221100",
+      "name": "श्रीमती दुर्गा प्रसाद",
+      "role": "AWC Helper",
+      "awc_id": "AWC-SHA-1084",
+      "center_name": "पोड़ी",
+      "block_name": "सोहागपुर",
+      "district": "Shahdol",
+      "state": "Madhya Pradesh",
+      "gps_lat": 23.3105,
+      "gps_lon": 81.4230,
+      "active": false,
+      "joined_date": "2022-09-01"
+    }
+  ],
+  "awc_centres": [
+    {
+      "awc_id": "AWC-SHA-1042",
+      "center_name": "रामपुर",
+      "block_name": "सोहागपुर",
+      "gps_lat": 23.2841,
+      "gps_lon": 81.3862,
+      "total_children": 32,
+      "total_pregnant": 8
+    },
+    {
+      "awc_id": "AWC-SHA-1084",
+      "center_name": "पोड़ी",
+      "block_name": "सोहागपुर",
+      "gps_lat": 23.3105,
+      "gps_lon": 81.4230,
+      "total_children": 28,
+      "total_pregnant": 6
+    },
+    {
+      "awc_id": "AWC-SHA-1120",
+      "center_name": "खन्नौधी",
+      "block_name": "जयसिंहनगर",
+      "gps_lat": 23.5612,
+      "gps_lon": 81.2475,
+      "total_children": 45,
+      "total_pregnant": 11
+    },
+    {
+      "awc_id": "AWC-SHA-1012",
+      "center_name": "विचारपुर",
+      "block_name": "सोहागपुर",
+      "gps_lat": 23.2210,
+      "gps_lon": 81.3540,
+      "total_children": 22,
+      "total_pregnant": 5
+    },
+    {
+      "awc_id": "AWC-SHA-1001",
+      "center_name": "सोहागपुर नगर",
+      "block_name": "सोहागपुर",
+      "gps_lat": 23.1930,
+      "gps_lon": 81.4100,
+      "total_children": 58,
+      "total_pregnant": 14
+    },
+    {
+      "awc_id": "AWC-SHA-1203",
+      "center_name": "बहेरा टोला",
+      "block_name": "ब्योहारी",
+      "gps_lat": 23.9821,
+      "gps_lon": 81.4450,
+      "total_children": 19,
+      "total_pregnant": 4
+    },
+    {
+      "awc_id": "AWC-SHA-1310",
+      "center_name": "गोहपारू ग्राम",
+      "block_name": "गोहपारू",
+      "gps_lat": 23.4015,
+      "gps_lon": 81.3205,
+      "total_children": 36,
+      "total_pregnant": 9
+    }
+  ],
+  "_meta": {
+    "version": "3.0",
+    "description": "Expanded master data for Shahdol District AWC Pilot — Day 3 MVP",
+    "total_workers": 10,
+    "active_workers": 9,
+    "total_centres": 7,
+    "blocks_covered": ["सोहागपुर", "जयसिंहनगर", "ब्योहारी", "गोहपारू"],
+    "district_total_awc": 1450,
+    "last_updated": "2026-07-21",
+    "phone_format": "91XXXXXXXXXX (country code + 10-digit mobile)",
+    "gps_datum": "WGS84",
+    "note": "In production, this data will be fetched from NIC/WCD ICDS-CAS database."
+  }
+}
