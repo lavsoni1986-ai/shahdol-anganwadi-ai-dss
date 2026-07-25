@@ -7,6 +7,7 @@
 # Official API Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/messages
 # =====================================================================
 
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo  # Python 3.9+ stdlib
@@ -339,3 +340,281 @@ async def send_system_error_notice(to_phone: str) -> dict:
         to_phone=to_phone,
         message_text=message,
     )
+
+
+# ─────────────────────────────────────────────
+# Media Download & Storage (Pathlib + Validation)
+# ─────────────────────────────────────────────
+
+_MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB Limit
+_UPLOADS_DIR = Path("data") / "uploads"
+
+
+async def download_and_save_whatsapp_media(
+    media_id: str,
+    submission_id: str,
+    media_mime_type: Optional[str] = None,
+) -> dict:
+    """
+    Downloads image media from Meta Cloud API, validates size & image integrity via PIL,
+    prevents path traversal using pathlib, and saves to data/uploads/.
+
+    Returns dict:
+        {
+            "success": bool,
+            "local_path": str | None,
+            "sha256": str | None,
+            "error": str | None,
+            "file_size": int | None
+        }
+    """
+    import hashlib
+    import io
+    from PIL import Image
+
+    if not settings.is_whatsapp_configured:
+        logger.warning("media_download_unconfigured", media_id=media_id)
+        return {
+            "success": False,
+            "local_path": None,
+            "sha256": None,
+            "error": "WhatsApp API credentials not configured",
+            "file_size": None,
+        }
+
+    headers = {"Authorization": f"Bearer {settings.whatsapp_access_token}"}
+    media_info_url = f"{settings.whatsapp_api_base_url}/{settings.whatsapp_api_version}/{media_id}"
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            # 1. Fetch Media URL from Meta API
+            res = await client.get(media_info_url, headers=headers)
+            if res.status_code != 200:
+                logger.error("media_info_fetch_failed", status_code=res.status_code, body=res.text[:200])
+                return {
+                    "success": False,
+                    "local_path": None,
+                    "sha256": None,
+                    "error": f"Meta API error status {res.status_code}",
+                    "file_size": None,
+                }
+
+            media_info = res.json()
+            download_url = media_info.get("url")
+            if not download_url:
+                return {
+                    "success": False,
+                    "local_path": None,
+                    "sha256": None,
+                    "error": "No download URL returned by Meta API",
+                    "file_size": None,
+                }
+
+            # 2. Download Media Content Bytes
+            download_res = await client.get(download_url, headers=headers)
+            if download_res.status_code != 200:
+                return {
+                    "success": False,
+                    "local_path": None,
+                    "sha256": None,
+                    "error": f"Media binary download failed (status {download_res.status_code})",
+                    "file_size": None,
+                }
+
+            content_bytes = download_res.content
+            file_size = len(content_bytes)
+
+            # 3. File Size Validation (Max 5 MB)
+            if file_size > _MAX_FILE_SIZE_BYTES:
+                logger.warning("file_size_exceeded", file_size=file_size, max_limit=_MAX_FILE_SIZE_BYTES)
+                return {
+                    "success": False,
+                    "local_path": None,
+                    "sha256": None,
+                    "error": f"File size ({file_size} bytes) exceeds maximum 5 MB limit",
+                    "file_size": file_size,
+                }
+
+            if file_size == 0:
+                return {
+                    "success": False,
+                    "local_path": None,
+                    "sha256": None,
+                    "error": "Downloaded media file is empty (0 bytes)",
+                    "file_size": 0,
+                }
+
+            # 4. PIL Verification (Reject corrupted images)
+            try:
+                img_io = io.BytesIO(content_bytes)
+                with Image.open(img_io) as img:
+                    img.verify()
+            except Exception as e:
+                logger.error("pil_image_verification_failed", media_id=media_id, error=str(e))
+                return {
+                    "success": False,
+                    "local_path": None,
+                    "sha256": None,
+                    "error": f"Corrupted image file: {str(e)}",
+                    "file_size": file_size,
+                }
+
+            # 5. Compute SHA-256 Hash
+            sha256_hash = hashlib.sha256(content_bytes).hexdigest()
+
+            # 6. Local Image Storage using pathlib (Prevent Path Traversal)
+            _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+            ext = ".png" if media_mime_type == "image/png" else ".jpg"
+
+            # Strict safe filename using pathlib
+            safe_filename = f"{Path(submission_id).name}{ext}"
+            file_path = (_UPLOADS_DIR / safe_filename).resolve()
+            base_dir = _UPLOADS_DIR.resolve()
+
+            try:
+                file_path.relative_to(base_dir)
+            except ValueError:
+                logger.error("path_traversal_prevented", attempt_path=str(file_path))
+                return {
+                    "success": False,
+                    "local_path": None,
+                    "sha256": sha256_hash,
+                    "error": "Path traversal attempt blocked",
+                    "file_size": file_size,
+                }
+
+            # Write file
+            file_path.write_bytes(content_bytes)
+            logger.info("media_file_saved", path=str(file_path), file_size=file_size)
+
+            return {
+                "success": True,
+                "local_path": str(file_path),
+                "sha256": sha256_hash,
+                "error": None,
+                "file_size": file_size,
+            }
+
+    except Exception as e:
+        logger.error("media_download_exception", media_id=media_id, error=str(e), exc_info=True)
+        return {
+            "success": False,
+            "local_path": None,
+            "sha256": None,
+            "error": f"Media download error: {str(e)}",
+            "file_size": None,
+        }
+
+
+# ─────────────────────────────────────────────
+# Virtual Broadcast & Document Sending
+# ─────────────────────────────────────────────
+
+async def send_whatsapp_document(
+    to_phone: str,
+    document_url: str,
+    filename: str,
+    caption: Optional[str] = None,
+) -> dict:
+    """
+    Sends a PDF document to a WhatsApp phone number using Meta Cloud API.
+
+    Args:
+        to_phone: Recipient phone number with country code
+        document_url: Publicly accessible URL or Media ID of document
+        filename: File name to display in WhatsApp (e.g. "AWC_Daily_Report.pdf")
+        caption: Optional text caption
+
+    Returns:
+        dict with success status and message_id / error
+    """
+    if not settings.is_whatsapp_configured:
+        logger.warning("whatsapp_not_configured_document_send", to_phone=to_phone)
+        return {"success": False, "message_id": None, "error": "WhatsApp credentials not configured"}
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to_phone,
+        "type": "document",
+        "document": {
+            "link": document_url,
+            "filename": filename,
+            "caption": caption or "",
+        },
+    }
+
+    headers = {
+        "Authorization": f"Bearer {settings.whatsapp_access_token}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=_API_TIMEOUT_SECONDS) as client:
+            res = await client.post(settings.whatsapp_api_url, json=payload, headers=headers)
+
+        res_data = res.json()
+        if res.status_code == 200:
+            msgs = res_data.get("messages", [])
+            msg_id = msgs[0].get("id") if msgs else None
+            logger.info("document_sent_success", to_phone=to_phone, msg_id=msg_id)
+            return {"success": True, "message_id": msg_id, "error": None}
+        else:
+            err = res_data.get("error", {}).get("message", "API Error")
+            logger.error("document_send_failed", to_phone=to_phone, status=res.status_code, error=err)
+            return {"success": False, "message_id": None, "error": f"API Error {res.status_code}: {err}"}
+
+    except Exception as e:
+        logger.error("document_send_exception", to_phone=to_phone, error=str(e))
+        return {"success": False, "message_id": None, "error": str(e)}
+
+
+async def virtual_broadcast_document(
+    document_url: str,
+    filename: str,
+    caption: str,
+    worker_phone: Optional[str] = None,
+) -> dict:
+    """
+    Virtual Broadcast module: Sends document to Worker, Supervisor, CDPO, CEO, Collector.
+    Reads recipient phone numbers from OFFICER_RECIPIENT_NUMBERS configuration setting.
+
+    Args:
+        document_url: PDF document URL
+        filename: Document filename
+        caption: Broadcast caption
+        worker_phone: Optional AWC worker phone number
+
+    Returns:
+        dict mapping role -> send status
+    """
+    officer_numbers = settings.officer_recipient_numbers_dict
+    recipients = {}
+
+    if worker_phone:
+        recipients["Worker"] = worker_phone
+
+    for role in ["Supervisor", "CDPO", "CEO", "Collector"]:
+        phone = officer_numbers.get(role) or officer_numbers.get(role.lower())
+        if phone:
+            recipients[role] = phone
+
+    logger.info(
+        "virtual_broadcast_started",
+        recipient_count=len(recipients),
+        filename=filename,
+        roles=list(recipients.keys()),
+    )
+
+    broadcast_results = {}
+    for role, phone in recipients.items():
+        res = await send_whatsapp_document(
+            to_phone=phone,
+            document_url=document_url,
+            filename=filename,
+            caption=f"[{role} Copy] {caption}",
+        )
+        broadcast_results[role] = res
+
+    logger.info("virtual_broadcast_completed", results=broadcast_results)
+    return broadcast_results

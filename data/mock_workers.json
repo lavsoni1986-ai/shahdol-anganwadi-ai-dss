@@ -1,6 +1,20 @@
 {
   "registered_workers": [
     {
+      "phone": "919753239303",
+      "name": "Lav Soni",
+      "role": "AWC Worker",
+      "awc_id": "AWC-SHA-1001",
+      "center_name": "सोहागपुर नगर",
+      "block_name": "सोहागपुर",
+      "district": "Shahdol",
+      "state": "Madhya Pradesh",
+      "gps_lat": 23.1930,
+      "gps_lon": 81.4100,
+      "active": true,
+      "joined_date": "2026-07-24"
+    },
+    {
       "phone": "919876543210",
       "name": "श्रीमती सुनीता देवी",
       "role": "AWC Worker",
@@ -209,8 +223,8 @@
   "_meta": {
     "version": "3.0",
     "description": "Expanded master data for Shahdol District AWC Pilot — Day 3 MVP",
-    "total_workers": 10,
-    "active_workers": 9,
+    "total_workers": 11,
+    "active_workers": 10,
     "total_centres": 7,
     "blocks_covered": ["सोहागपुर", "जयसिंहनगर", "ब्योहारी", "गोहपारू"],
     "district_total_awc": 1450,

@@ -23,6 +23,7 @@ from app.config import settings
 from app.database import get_db
 from app.models import DailySubmission, SubmissionStatus
 from app.services.pdf_generator import generate_daily_report_pdf
+from app.services.whatsapp import send_whatsapp_document
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -365,3 +366,58 @@ async def download_excel_report(
             "X-Row-Count": str(len(submissions)),
         },
     )
+
+
+# ═════════════════════════════════════════════════════════════════════
+# ENDPOINT 3 — Send PDF Report to WhatsApp Phone Number
+# POST /api/v1/reports/send-whatsapp
+# ═════════════════════════════════════════════════════════════════════
+
+@router.post(
+    "/send-whatsapp",
+    summary="Dispatch Daily PDF Report to WhatsApp Recipient",
+    description="Generates the official daily PDF report and dispatches it via WhatsApp Meta Cloud API to the specified phone number.",
+)
+async def send_whatsapp_pdf_report(
+    to_phone: str = Query(..., description="Recipient phone number with country code, e.g. 919753239303"),
+    report_date: Optional[str] = Query(None, alias="date", description="Report date YYYY-MM-DD. Defaults to today."),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Generates and dispatches PDF report to a WhatsApp phone number.
+    """
+    submissions = await _fetch_submissions(db, report_date, None, None)
+    stats       = await _compute_stats(submissions, report_date)
+    display_date = _display_date(report_date)
+
+    # Save PDF temporarily to disk in static/reports for public link
+    pdf_bytes = generate_daily_report_pdf(
+        report_date=display_date,
+        stats=stats,
+        submissions=submissions,
+        block_name=None,
+        status_filter=None,
+    )
+
+    safe_date = (report_date or datetime.now(IST).strftime("%Y-%m-%d")).replace("-", "")
+    filename = f"Shahdol_AWC_Daily_Report_{safe_date}.pdf"
+
+    # Build public URL for Meta API document delivery
+    base_url = settings.app_public_url or "https://api.bharatosdemo24.com"
+    pdf_url = f"{base_url.rstrip('/')}/api/v1/reports/pdf?date={report_date or ''}"
+
+    res = await send_whatsapp_document(
+        to_phone=to_phone,
+        document_url=pdf_url,
+        filename=filename,
+        caption=f"📄 *शहडोल जिला — दैनिक आंगनवाड़ी पोषण आहार रिपोर्ट*\n📅 दिनांक: {display_date}\n📊 कुल केंद्र: {TOTAL_AWC} | रिपोर्ट प्राप्त: {len(submissions)}",
+    )
+
+    return {
+        "status": "success" if res.get("success") else "failed",
+        "to_phone": to_phone,
+        "report_date": display_date,
+        "filename": filename,
+        "whatsapp_response": res,
+    }
+

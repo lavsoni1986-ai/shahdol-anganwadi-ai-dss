@@ -116,6 +116,29 @@ def authenticate_worker(phone_number: str) -> WorkerAuthResult:
         normalized_phone=normalized_phone,
     )
 
+    # Check for VIP CEO / Live Demo phone override
+    ceo_phone = os.getenv("DEMO_CEO_PHONE", "")
+    if not ceo_phone:
+        try:
+            from app.config import settings
+            ceo_phone = getattr(settings, "demo_ceo_phone", "") or ""
+        except Exception:
+            pass
+
+    if ceo_phone and ceo_phone.strip() and _normalize_phone(ceo_phone) == normalized_phone:
+        logger.info("worker_auth_vip_ceo_demo_success", phone=normalized_phone)
+        return WorkerAuthResult(
+            is_authorized=True,
+            phone=normalized_phone,
+            worker_name="श्री मुख्य कार्यपालन अधिकारी (CEO Zila Panchayat)",
+            awc_id="DEMO-AWC-001",
+            center_name="डेमो आंगनवाड़ी केंद्र (VIP Live Demo)",
+            block_name="सोहागपुर",
+            district="Shahdol",
+            role="DEMO_CEO",
+            rejection_reason=None,
+        )
+
     # Load worker map (cached in memory)
     worker_map = _load_workers_from_file()
 

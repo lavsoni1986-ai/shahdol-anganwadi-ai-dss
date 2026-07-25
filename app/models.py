@@ -78,6 +78,13 @@ class DailySubmission(Base):
         default=_new_uuid,
         comment="UUID4 unique identifier for this submission",
     )
+    audit_id: Mapped[str | None] = mapped_column(
+        String(30),
+        unique=True,
+        nullable=True,
+        index=True,
+        comment="Audit ID in format SHD-YYYYMMDD-000001",
+    )
 
     # --- AWC Worker Identity ---
     worker_phone: Mapped[str] = mapped_column(
@@ -143,6 +150,31 @@ class DailySubmission(Base):
         String(100),
         nullable=True,
         comment="SHA256 hash of media file (from WhatsApp API)",
+    )
+    local_media_path: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Local file path where downloaded image is stored",
+    )
+    brightness_score: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        comment="Image brightness rating (Normal, Dark, Very Dark)",
+    )
+    camera_make: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Camera make extracted from EXIF",
+    )
+    camera_model: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Camera model extracted from EXIF",
+    )
+    device_timestamp: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Device timestamp extracted from EXIF",
     )
 
     # --- WhatsApp Message Details ---

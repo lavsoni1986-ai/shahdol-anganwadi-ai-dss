@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import event, text
+from sqlalchemy import event, text, inspect
 from app.config import settings
 from app.utils.logger import get_logger
 
@@ -112,20 +112,44 @@ async def get_db() -> AsyncSession:
             await session.close()
 
 
+def _sync_schema_columns(sync_conn):
+    """
+    Dynamically inspects SQLite tables and adds any missing columns defined in ORM models.
+    Ensures safe schema evolution without losing existing table data or requiring manual ALTER statements.
+    """
+    inspector = inspect(sync_conn)
+    for table_name, table in Base.metadata.tables.items():
+        if not inspector.has_table(table_name):
+            continue
+        existing_cols = {col["name"].lower() for col in inspector.get_columns(table_name)}
+        for column in table.columns:
+            if column.name.lower() not in existing_cols:
+                col_type = column.type.compile(sync_conn.dialect)
+                alter_stmt = f'ALTER TABLE "{table_name}" ADD COLUMN "{column.name}" {col_type}'
+                logger.info(
+                    "auto_migrating_missing_column",
+                    table=table_name,
+                    column=column.name,
+                    col_type=str(col_type),
+                )
+                sync_conn.execute(text(alter_stmt))
+
+
 # ─────────────────────────────────────────────
 # Database Initialization
 # ─────────────────────────────────────────────
 async def init_db() -> None:
     """
     Creates all database tables defined in ORM models.
+    Dynamically migrates missing columns for zero-downtime schema evolution.
     Called once at application startup.
-    Safe to call multiple times — uses CREATE TABLE IF NOT EXISTS.
     """
     # Import all models here to register them with Base.metadata
     from app import models  # noqa: F401 — import triggers model registration
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_sync_schema_columns)
 
     logger.info(
         "database_initialized",

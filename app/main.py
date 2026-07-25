@@ -6,6 +6,15 @@
 #          Worker authentication, Data persistence, Auto-acknowledgement
 # =====================================================================
 
+import socket
+
+# Force IPv4 socket resolution globally at process startup
+_orig_getaddrinfo = socket.getaddrinfo
+def _ipv4_getaddrinfo(*args, **kwargs):
+    res = _orig_getaddrinfo(*args, **kwargs)
+    return [r for r in res if r[0] == socket.AF_INET]
+socket.getaddrinfo = _ipv4_getaddrinfo
+
 import json
 import pathlib
 import time
@@ -48,7 +57,8 @@ from app.services.whatsapp import (
     send_unauthorized_rejection,
     send_system_error_notice,
 )
-from app.services.worker_auth import authenticate_worker
+from app.services.worker_auth import authenticate_worker, reload_workers
+from app.utils.audit import generate_audit_id
 from app.utils.logger import configure_logging, get_logger
 
 # ─────────────────────────────────────────────
@@ -144,9 +154,27 @@ async def request_logging_middleware(request: Request, call_next):
     """
     Logs every HTTP request with timing info.
     Adds X-Request-ID header to each response for tracing.
+    Provides prominent WEBHOOK HIT logging with Cloudflare & Meta headers for /webhook requests.
     """
     request_id = str(uuid.uuid4())[:8]
     start_time = time.monotonic()
+
+    # Enhanced entry log for Webhook endpoints
+    if request.url.path.startswith("/webhook"):
+        cf_ip = request.headers.get("cf-connecting-ip")
+        x_forwarded_for = request.headers.get("x-forwarded-for")
+        client_ip = cf_ip or (x_forwarded_for.split(",")[0].strip() if x_forwarded_for else (request.client.host if request.client else "unknown"))
+        logger.info(
+            "WEBHOOK HIT",
+            method=request.method,
+            path=request.url.path,
+            client_ip=client_ip,
+            cf_ray=request.headers.get("cf-ray"),
+            user_agent=request.headers.get("user-agent"),
+            content_type=request.headers.get("content-type"),
+            meta_signature=request.headers.get("x-hub-signature-256"),
+            request_id=request_id,
+        )
 
     response = await call_next(request)
 
@@ -318,6 +346,18 @@ async def health_check():
     }
 
 
+@app.post(
+    "/api/v1/reload-workers",
+    summary="Reload Worker Master Data",
+    tags=["System"],
+)
+async def api_reload_workers():
+    """Clears in-memory worker auth cache and reloads mock_workers.json from disk."""
+    reload_workers()
+    return {"status": "success", "message": "Worker master data reloaded successfully."}
+
+
+
 # ─────────────────────────────────────────────
 # GET /webhook — Meta Webhook Verification
 # ─────────────────────────────────────────────
@@ -385,6 +425,11 @@ async def verify_webhook(
     tags=["Webhook"],
     status_code=status.HTTP_200_OK,
 )
+@app.post(
+    "/webhook/",
+    include_in_schema=False,
+    status_code=status.HTTP_200_OK,
+)
 async def receive_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -411,6 +456,18 @@ async def receive_webhook(
     Reference: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks
     """
     received_at = datetime.now(timezone.utc)
+    client_ip = request.client.host if request.client else None
+    meta_signature = request.headers.get("x-hub-signature-256")
+
+    # Diagnostic entry log (Step 6)
+    logger.info(
+        "WEBHOOK HIT",
+        method=request.method,
+        url=str(request.url),
+        client_ip=client_ip,
+        meta_signature=meta_signature,
+        content_type=request.headers.get("content-type"),
+    )
 
     # ── 1. Read raw body ─────────────────────
     try:
@@ -465,13 +522,24 @@ async def receive_webhook(
         has_media=parsed.media_id is not None,
     )
 
-    # ── 4. Authenticate worker ───────────────
+    # ── 4. Authenticate worker & Validate MIME ─────
     auth_result: WorkerAuthResult = authenticate_worker(parsed.sender_phone)
 
-    # ── 5. Persist submission to DB ──────────
+    # MIME Validation (Allow only image/jpeg, image/png, image/jpg)
+    allowed_mimes = {"image/jpeg", "image/png", "image/jpg"}
+    if parsed.media_id and parsed.media_mime_type:
+        if parsed.media_mime_type.lower() not in allowed_mimes:
+            logger.warning("invalid_mime_type_rejected", mime=parsed.media_mime_type, sender=parsed.sender_phone)
+            auth_result.is_authorized = False
+            auth_result.rejection_reason = f"Invalid file type ({parsed.media_mime_type}). Only JPEG and PNG images are allowed."
+
+    # ── 5. Generate Audit ID & Persist submission to DB ──
     new_submission_id = str(uuid.uuid4())
+    audit_id = await generate_audit_id(db)
+
     submission = DailySubmission(
         submission_id=new_submission_id,
+        audit_id=audit_id,
         worker_phone=parsed.sender_phone,
         worker_name=auth_result.worker_name,
         awc_id=auth_result.awc_id,
@@ -501,6 +569,7 @@ async def receive_webhook(
     logger.info(
         "submission_saved",
         submission_id=new_submission_id,
+        audit_id=audit_id,
         awc_id=auth_result.awc_id,
         is_authorized=auth_result.is_authorized,
         status=submission.status,

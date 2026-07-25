@@ -135,6 +135,7 @@ class ParsedSubmission(BaseModel):
     message_id: Optional[str] = None
     whatsapp_timestamp: Optional[str] = None
     message_type: Optional[str] = None
+    audit_id: Optional[str] = None
 
     # Media info
     media_id: Optional[str] = None
@@ -188,6 +189,7 @@ class SubmissionResponse(BaseModel):
     """Response schema representing a saved daily submission."""
     id: int
     submission_id: str
+    audit_id: Optional[str] = None
     awc_id: Optional[str]
     worker_phone: str
     worker_name: Optional[str]

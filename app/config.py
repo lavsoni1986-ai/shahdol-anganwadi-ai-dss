@@ -21,6 +21,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",         # Ignore extra env vars not defined here
+        populate_by_name=True,
     )
 
     # --- Application ---
@@ -29,6 +30,10 @@ class Settings(BaseSettings):
         description="Application display name",
     )
     app_version: str = Field(default="1.0.0")
+    app_public_url: str = Field(
+        default="https://api.bharatosdemo24.com",
+        description="Public HTTPS base URL of the application for Meta Cloud API callbacks and media links",
+    )
     debug: bool = Field(default=False, description="Enable debug mode")
     log_level: str = Field(default="INFO", description="Logging level")
 
@@ -44,7 +49,8 @@ class Settings(BaseSettings):
 
     # --- Meta WhatsApp Cloud API ---
     whatsapp_verify_token: str = Field(
-        default="bharat_os_shahdol_verify_token_2026",
+        default="",
+        alias="WHATSAPP_VERIFY_TOKEN",
         description="Custom webhook verification token set in Meta Developer Console",
     )
     whatsapp_access_token: str = Field(
@@ -72,6 +78,15 @@ class Settings(BaseSettings):
     pilot_center_name: str = Field(default="रामपुर")
     pilot_block_name: str = Field(default="सोहागपुर")
     pilot_district: str = Field(default="Shahdol")
+    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY", description="Google Gemini API Key")
+    groq_api_key: str = Field(default="", alias="GROQ_API_KEY", description="Groq Cloud Vision API Key")
+    demo_ceo_phone: str = Field(default="", alias="DEMO_CEO_PHONE", description="VIP CEO Live Demo Phone Number")
+
+    # --- Virtual Broadcast Officer Recipients ---
+    officer_recipient_numbers: str = Field(
+        default="{}",
+        description="JSON dict or comma-separated list of officer phone numbers for virtual broadcast",
+    )
 
     @property
     def whatsapp_api_url(self) -> str:
@@ -86,6 +101,24 @@ class Settings(BaseSettings):
     def is_whatsapp_configured(self) -> bool:
         """Returns True if WhatsApp credentials are configured."""
         return bool(self.whatsapp_access_token and self.whatsapp_phone_number_id)
+
+    @property
+    def officer_recipient_numbers_dict(self) -> dict[str, str]:
+        """Parses officer_recipient_numbers setting into a dictionary."""
+        if not self.officer_recipient_numbers:
+            return {}
+        try:
+            import json
+            if self.officer_recipient_numbers.startswith("{"):
+                return json.loads(self.officer_recipient_numbers)
+            res = {}
+            for item in self.officer_recipient_numbers.split(","):
+                if "=" in item:
+                    k, v = item.split("=", 1)
+                    res[k.strip()] = v.strip()
+            return res
+        except Exception:
+            return {}
 
 
 @lru_cache()
