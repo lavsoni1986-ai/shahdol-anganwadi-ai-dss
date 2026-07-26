@@ -73,9 +73,14 @@ class Settings(BaseSettings):
         description="Application secret key — CHANGE IN PRODUCTION",
     )
 
-    # --- Pilot Centre Configuration ---
-    pilot_awc_id: str = Field(default="AWC-SHA-1042")
-    pilot_center_name: str = Field(default="रामपुर")
+    # --- Pilot Centre & Single Anganwadi Demo Mode Configuration (Version 3.0) ---
+    demo_mode: bool = Field(default=True, alias="DEMO_MODE", description="Enable Single Anganwadi Demo Mode for CEO Presentation")
+    demo_awc_id: str = Field(default="AWC-SHA-1001", alias="DEMO_AWC_ID", description="Demo Anganwadi Centre ID")
+    demo_center_name: str = Field(default="सोहागपुर नगर", alias="DEMO_CENTER_NAME", description="Demo Anganwadi Centre Name")
+    demo_worker_name: str = Field(default="लव सोनी", alias="DEMO_WORKER_NAME", description="Demo Anganwadi Worker Name")
+    demo_block_name: str = Field(default="सोहागपुर", alias="DEMO_BLOCK_NAME", description="Demo Block Name")
+    pilot_awc_id: str = Field(default="AWC-SHA-1001")
+    pilot_center_name: str = Field(default="सोहागपुर नगर")
     pilot_block_name: str = Field(default="सोहागपुर")
     pilot_district: str = Field(default="Shahdol")
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY", description="Google Gemini API Key")

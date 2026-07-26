@@ -56,3 +56,12 @@ async def test_audit_id_format(async_session):
     audit_id = await generate_audit_id(async_session)
     assert audit_id.startswith("SHD-")
     assert len(audit_id) == 19  # SHD-YYYYMMDD-000001
+
+
+@pytest.mark.asyncio
+async def test_dashboard_submissions_endpoint(async_session):
+    from app.routers.dashboard import list_submissions
+    res = await list_submissions(db=async_session, page=1, page_size=15)
+    assert res.total >= 0
+    assert isinstance(res.items, list)
+

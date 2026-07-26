@@ -196,15 +196,19 @@
         <!-- Ashoka Chakra placeholder emblem -->
         <div class="w-14 h-14 rounded-full bg-white/10 border-2 border-white/30 flex items-center justify-center text-2xl shrink-0">🇮🇳</div>
         <div>
-          <div class="text-saffron text-xs font-semibold tracking-widest uppercase mb-0.5">BharatOS — Madhya Pradesh</div>
+          <div class="text-saffron text-xs font-semibold tracking-widest uppercase mb-0.5">महिला एवं बाल विकास विभाग — मध्य प्रदेश शासन</div>
           <h1 class="hindi text-lg sm:text-xl font-bold leading-tight text-white">
-            जिला प्रशासन शहडोल — आंगनवाड़ी डिजिटल सत्यापन एवं निर्णय सहायता डैशबोर्ड
+            शहडोल आंगनवाड़ी डिजिटल सत्यापन एवं निर्णय सहायता प्रणाली (DSS)
           </h1>
           <div class="text-blue-200 text-xs mt-1 flex items-center gap-2">
             <span class="live-dot"></span>
             <span id="live-clock">--:-- AM IST</span>
             &nbsp;·&nbsp;
-            <span class="font-semibold hindi">पायलट केंद्र: रामपुर (AWC-SHA-1042) · सोहागपुर</span>
+            <span class="font-bold text-white hindi">आंगनवाड़ी डिजिटल सत्यापन प्रतिवेदन</span>
+            &nbsp;·&nbsp;
+            <span class="hindi">केंद्र: सोहागपुर नगर (AWC-SHA-1001)</span>
+            &nbsp;·&nbsp;
+            <span class="text-amber-300 text-xs font-semibold hindi">(पायलट प्रदर्शन हेतु)</span>
           </div>
         </div>
       </div>
@@ -218,7 +222,7 @@
         </button>
         <div class="bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-center">
           <div class="text-blue-200 text-xs">अधिकारी</div>
-          <div class="text-white text-sm font-semibold hindi">जिला अधिकारी शहडोल</div>
+          <div class="text-white text-sm font-semibold hindi">जिला अधिकारी / CEO</div>
         </div>
       </div>
 
@@ -230,81 +234,96 @@
   <!-- ═══════════════════════════════════════════════════════════════ -->
   <main class="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
-    <!-- ─── KPI CARDS ─────────────────────────────────────────────── -->
+    <!-- ─── PILOT SINGLE AWC DEMO BANNER WITH MANDATORY NOTICE ─────── -->
+    <div class="bg-gradient-to-r from-blue-900 via-indigo-900 to-gov-900 border border-blue-700/50 rounded-2xl p-5 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-2xl shrink-0">📍</div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="bg-amber-500/20 text-amber-300 border border-amber-400/40 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider hindi">पायलट प्रदर्शन (একल आंगनवाड़ी)</span>
+            <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider hindi">लाइव सक्रिय</span>
+          </div>
+          <h2 class="text-lg font-bold mt-1 hindi">आंगनवाड़ी केंद्र: सोहागपुर नगर &nbsp;|&nbsp; AWC ID: AWC-SHA-1001</h2>
+          <p class="text-xs text-amber-200 mt-1 font-medium hindi bg-amber-500/10 border border-amber-400/20 rounded-lg px-3 py-1.5 inline-block">
+            📌 नोट: यह प्रतिवेदन पायलट प्रदर्शन हेतु एकल आंगनवाड़ी के वास्तविक डेटा पर आधारित है।
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/api/v1/reports/pdf?inline=true" target="_blank"
+          class="bg-amber-500 hover:bg-amber-600 text-gov-950 text-xs font-bold px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 hindi">
+          📄 शासकीय एकल आंगनवाड़ी PDF रिपोर्ट
+        </a>
+      </div>
+    </div>
+
+    <!-- ─── KPI CARDS (5 METRICS) ─────────────────────────────────── -->
     <section id="kpi-section">
       <div class="flex items-center justify-between mb-3">
-        <h2 class="text-gov-800 font-bold text-base hindi">📊 आज का सारांश</h2>
+        <h2 class="text-gov-800 font-bold text-base hindi">📊 आज का सारांश (पायलट प्रदर्शन)</h2>
         <span id="stats-timestamp" class="text-slate-400 text-xs">लोड हो रहा है…</span>
       </div>
 
-      <!-- KPI Grid -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4" id="kpi-grid">
+      <!-- KPI Grid (5 Cards Layout) -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4" id="kpi-grid">
 
         <!-- Card 1: Total Centres -->
-        <div class="kpi-card p-5">
+        <div class="kpi-card p-4">
           <div class="flex items-start justify-between">
             <div>
-              <p class="text-slate-500 text-xs font-semibold uppercase tracking-wide hindi">कुल स्वीकृत केंद्र</p>
-              <p class="text-3xl font-extrabold text-gov-800 mt-1" id="kpi-total">1,450</p>
-              <p class="text-slate-400 text-xs mt-1">शहडोल जिला</p>
+              <p class="text-slate-500 text-xs font-semibold uppercase tracking-wide hindi">कुल केंद्र</p>
+              <p class="text-2xl font-extrabold text-gov-800 mt-1" id="kpi-total">1</p>
+              <p class="text-slate-400 text-[11px] mt-1 hindi">सोहागपुर नगर (AWC-SHA-1001)</p>
             </div>
-            <div class="w-11 h-11 rounded-2xl bg-gov-100 flex items-center justify-center text-xl">🏛️</div>
+            <div class="w-10 h-10 rounded-xl bg-gov-100 flex items-center justify-center text-lg">🏛️</div>
           </div>
-          <div class="mt-3 h-1.5 bg-gov-100 rounded-full overflow-hidden">
-            <div class="h-full bg-gov-600 rounded-full" id="kpi-coverage-bar" style="width:0%"></div>
-          </div>
-          <p class="text-gov-600 text-xs font-semibold mt-1" id="kpi-coverage-text">कवरेज: 0%</p>
         </div>
 
         <!-- Card 2: Reported Today -->
-        <div class="kpi-card p-5">
+        <div class="kpi-card p-4">
           <div class="flex items-start justify-between">
             <div>
-              <p class="text-slate-500 text-xs font-semibold uppercase tracking-wide hindi">आज प्रेषित रिपोर्ट</p>
-              <p class="text-3xl font-extrabold text-indigo-700 mt-1" id="kpi-reported">–</p>
-              <p class="text-slate-400 text-xs mt-1 hindi">आज की प्राप्त रिपोर्टें</p>
+              <p class="text-slate-500 text-xs font-semibold uppercase tracking-wide hindi">आज प्राप्त रिपोर्ट</p>
+              <p class="text-2xl font-extrabold text-indigo-700 mt-1" id="kpi-reported">1</p>
+              <p class="text-slate-400 text-[11px] mt-1 hindi">WhatsApp सबमिशन</p>
             </div>
-            <div class="w-11 h-11 rounded-2xl bg-indigo-50 flex items-center justify-center text-xl">📨</div>
-          </div>
-          <div class="mt-3 flex items-center gap-1.5">
-            <span class="live-dot"></span>
-            <span class="text-xs text-slate-400 hindi">लाइव अपडेट</span>
+            <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-lg">📨</div>
           </div>
         </div>
 
-        <!-- Card 3: Approved -->
-        <div class="kpi-card p-5">
+        <!-- Card 3: AI Verified -->
+        <div class="kpi-card p-4">
           <div class="flex items-start justify-between">
             <div>
-              <p class="text-slate-500 text-xs font-semibold uppercase tracking-wide hindi">सत्यापित रिपोर्ट</p>
-              <p class="text-3xl font-extrabold text-emerald-700 mt-1" id="kpi-approved">–</p>
-              <p class="text-slate-400 text-xs mt-1 hindi">अनुमोदित</p>
+              <p class="text-slate-500 text-xs font-semibold uppercase tracking-wide hindi">AI द्वारा सत्यापित</p>
+              <p class="text-2xl font-extrabold text-emerald-700 mt-1" id="kpi-approved">1</p>
+              <p class="text-slate-400 text-[11px] mt-1 hindi">मानकों के अनुरूप</p>
             </div>
-            <div class="w-11 h-11 rounded-2xl bg-emerald-50 flex items-center justify-center text-xl">✅</div>
-          </div>
-          <div class="mt-3">
-            <div class="h-1.5 bg-emerald-100 rounded-full overflow-hidden">
-              <div class="h-full bg-emerald-500 rounded-full transition-all duration-700" id="approved-bar" style="width:0%"></div>
-            </div>
+            <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-lg">✅</div>
           </div>
         </div>
 
-        <!-- Card 4: Pending / Flagged -->
-        <div class="kpi-card p-5">
+        <!-- Card 4: Review Required / Flagged -->
+        <div class="kpi-card p-4">
           <div class="flex items-start justify-between">
             <div>
-              <p class="text-slate-500 text-xs font-semibold uppercase tracking-wide hindi">समीक्षा हेतु लंबित / फ्लैग्ड</p>
-              <p class="text-3xl font-extrabold text-amber-600 mt-1" id="kpi-pending">–</p>
-              <p class="text-slate-400 text-xs mt-1 hindi">
-                <span id="kpi-flagged-sub">–</span> फ्लैग्ड
-              </p>
+              <p class="text-slate-500 text-xs font-semibold uppercase tracking-wide hindi">समीक्षा आवश्यक</p>
+              <p class="text-2xl font-extrabold text-amber-600 mt-1" id="kpi-pending">0</p>
+              <p class="text-slate-400 text-[11px] mt-1 hindi">अपवाद / फ्लैग्ड</p>
             </div>
-            <div class="w-11 h-11 rounded-2xl bg-amber-50 flex items-center justify-center text-xl">⚠️</div>
+            <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-lg">⚠️</div>
           </div>
-          <div class="mt-3">
-            <div class="h-1.5 bg-amber-100 rounded-full overflow-hidden">
-              <div class="h-full bg-amber-400 rounded-full transition-all duration-700" id="pending-bar" style="width:0%"></div>
+        </div>
+
+        <!-- Card 5: Reporting Percentage -->
+        <div class="kpi-card p-4">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-slate-500 text-xs font-semibold uppercase tracking-wide hindi">रिपोर्टिंग प्रतिशत</p>
+              <p class="text-2xl font-extrabold text-gov-800 mt-1" id="kpi-coverage">100%</p>
+              <p class="text-slate-400 text-[11px] mt-1 hindi">समयबद्ध प्रेषण</p>
             </div>
+            <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-lg">📈</div>
           </div>
         </div>
 
@@ -317,9 +336,9 @@
       <!-- Table Header Bar -->
       <div class="bg-gov-900 px-5 py-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         <div>
-          <h2 class="text-white font-bold text-base hindi">📋 आज की प्रेषण रिपोर्ट</h2>
+          <h2 class="text-white font-bold text-base hindi">📋 प्रेषण रिपोर्ट (एकल आंगनवाड़ी सोहागपुर नगर)</h2>
           <p class="text-blue-200 text-xs mt-0.5 hindi">
-            सभी पंजीकृत AWC कार्यकर्ताओं की WhatsApp-आधारित फोटो सबमिशन
+            आंगनवाड़ी केंद्र सोहागपुर नगर (AWC-SHA-1001) कार्यकर्ता लव सोनी द्वारा WhatsApp-आधारित फोटो सबमिशन
           </p>
         </div>
         <div class="flex items-center gap-2 flex-wrap">

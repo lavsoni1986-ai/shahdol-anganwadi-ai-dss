@@ -143,11 +143,11 @@ def _date_utc_range(date_str: Optional[str] = None):
     ist = ZoneInfo("Asia/Kolkata")
     
     try:
-        if date_str:
+        if date_str and isinstance(date_str, str):
             now_ist = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=ist)
         else:
             now_ist = datetime.now(ist)
-    except ValueError:
+    except (ValueError, TypeError):
         now_ist = datetime.now(ist)
 
     start_ist = now_ist.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -196,7 +196,11 @@ async def get_dashboard_stats(
         DailySubmission.is_authorized == True,
     ]
     
-    if block_name:
+    # Version 3.0: CEO Demo Mode automatic filter
+    if settings.demo_mode:
+        base_filters.append(DailySubmission.awc_id == settings.demo_awc_id)
+
+    if block_name and not settings.demo_mode:
         base_filters.append(DailySubmission.block_name.ilike(f"%{block_name}%"))
         
     today_filter = and_(*base_filters)
@@ -231,13 +235,20 @@ async def get_dashboard_stats(
     )
     pending_review: int = pending_result.scalar_one() or 0
 
-    # Coverage percentage
-    coverage = round((reported_today / TOTAL_AWC_CENTRES) * 100, 1) if reported_today else 0.0
+    # Coverage percentage & Total Centres calculation
+    if settings.demo_mode:
+        total_awc_centres = 1
+        coverage = 100.0 if reported_today > 0 else 0.0
+    else:
+        total_awc_centres = TOTAL_AWC_CENTRES
+        coverage = round((reported_today / TOTAL_AWC_CENTRES) * 100, 1) if reported_today else 0.0
 
     now_ist = datetime.now(ist)
 
     logger.info(
         "dashboard_stats_computed",
+        demo_mode=settings.demo_mode,
+        demo_awc_id=settings.demo_awc_id if settings.demo_mode else None,
         reported_today=reported_today,
         approved_today=approved_today,
         flagged_today=flagged_today,
@@ -246,7 +257,7 @@ async def get_dashboard_stats(
     )
 
     return DashboardStats(
-        total_awc_centres=TOTAL_AWC_CENTRES,
+        total_awc_centres=total_awc_centres,
         reported_today=reported_today,
         approved_today=approved_today,
         flagged_today=flagged_today,
@@ -278,6 +289,7 @@ async def list_submissions(
     page_size: int = Query(20, ge=1, le=100, description="Records per page (max 100)"),
     # --- Filters ---
     search: Optional[str] = Query(None, description="Search in center_name, block_name, AWC ID, worker name"),
+    awc_id: Optional[str] = Query(None, description="Filter by AWC centre ID (partial match)"),
     center_name: Optional[str] = Query(None, description="Filter by centre name (partial match)"),
     block_name: Optional[str] = Query(None, description="Filter by block name (partial match)"),
     status: Optional[str] = Query(None, description="Filter by status: RECEIVED, APPROVED, FLAGGED, REJECTED"),
@@ -291,6 +303,10 @@ async def list_submissions(
     # Build the base query
     filters = [DailySubmission.is_authorized == True]
 
+    # Version 3.0: CEO Demo Mode automatic filter
+    if settings.demo_mode:
+        filters.append(DailySubmission.awc_id == settings.demo_awc_id)
+
     # Date filter
     if today_only and not date:
         start_utc, end_utc = _date_utc_range(None)
@@ -301,24 +317,24 @@ async def list_submissions(
     filters.append(DailySubmission.submission_timestamp <= end_utc)
 
     # Status filter
-    if status:
+    if status and isinstance(status, str):
         status_upper = status.upper()
         filters.append(DailySubmission.status == status_upper)
 
     # AWC ID filter
-    if awc_id:
+    if awc_id and isinstance(awc_id, str):
         filters.append(DailySubmission.awc_id.ilike(f"%{awc_id}%"))
 
     # Center name filter
-    if center_name:
+    if center_name and isinstance(center_name, str):
         filters.append(DailySubmission.center_name.ilike(f"%{center_name}%"))
 
     # Block name filter
-    if block_name:
+    if block_name and isinstance(block_name, str):
         filters.append(DailySubmission.block_name.ilike(f"%{block_name}%"))
 
     # Global search across multiple fields
-    if search:
+    if search and isinstance(search, str):
         search_term = f"%{search}%"
         filters.append(
             or_(

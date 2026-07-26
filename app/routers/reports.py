@@ -91,7 +91,11 @@ async def _fetch_submissions(
         DailySubmission.submission_timestamp >= start_utc,
         DailySubmission.submission_timestamp <= end_utc,
     ]
-    if block_name:
+    # Version 3.0: CEO Demo Mode automatic filter
+    if settings.demo_mode:
+        filters.append(DailySubmission.awc_id == settings.demo_awc_id)
+
+    if block_name and not settings.demo_mode:
         filters.append(DailySubmission.block_name.ilike(f"%{block_name}%"))
     if status_filter:
         filters.append(DailySubmission.status == status_filter.upper())
@@ -111,13 +115,21 @@ async def _compute_stats(submissions: list, date_str: Optional[str]) -> dict:
     approved  = sum(1 for s in submissions if s.status == SubmissionStatus.APPROVED)
     flagged   = sum(1 for s in submissions if s.status == SubmissionStatus.FLAGGED)
     pending   = sum(1 for s in submissions if s.status == SubmissionStatus.RECEIVED)
-    coverage  = round((total / TOTAL_AWC) * 100, 1) if total else 0.0
+    
+    if settings.demo_mode:
+        total_awc = 1
+        coverage  = 100.0 if total else 0.0
+    else:
+        total_awc = TOTAL_AWC
+        coverage  = round((total / TOTAL_AWC) * 100, 1) if total else 0.0
+
     return {
         "reported_today":    total,
         "approved_today":    approved,
         "flagged_today":     flagged,
         "pending_review":    pending,
         "coverage_percent":  coverage,
+        "total_awc_centres": total_awc,
     }
 
 

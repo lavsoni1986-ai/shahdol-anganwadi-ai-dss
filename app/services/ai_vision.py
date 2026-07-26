@@ -434,7 +434,7 @@ async def process_image_ai_pipeline(submission_id: str):
 
                     # Generate PDF report & dispatch document link
                     try:
-                        reports_dir = Path("static") / "reports"
+                        reports_dir = Path(__file__).parent.parent / "static" / "reports"
                         reports_dir.mkdir(parents=True, exist_ok=True)
                         pdf_filename = f"AWC_Report_{submission.audit_id or submission.submission_id[:8]}.pdf"
                         pdf_path = reports_dir / pdf_filename

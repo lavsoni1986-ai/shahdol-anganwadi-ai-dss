@@ -1,13 +1,14 @@
 # app/services/pdf_generator.py
 # =====================================================================
 # BharatOS — Shahdol Anganwadi Digital Verification & DSS
-# Official Government Executive PDF Report Generator
-# High-Impact Report Design for CEO Zila Panchayat & District Collector
-# Uses ReportLab with embedded Noto Devanagari Unicode font for Hindi.
+# Official Government Executive PDF Report Generator (Version 2.0)
+# High-Impact NIC/Government Design for CEO Zila Panchayat & District Collector
+# Uses ReportLab with embedded Noto Devanagari Unicode fonts and HarfBuzz shaping.
 # =====================================================================
 
 import io
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -30,8 +31,9 @@ from reportlab.platypus import (
     TableStyle,
 )
 from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase.ttfonts import TTFont, shapeStr
 
+from app.config import settings
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -48,20 +50,21 @@ _FONT_PATH   = _FONTS_DIR / "NotoSansDevanagari-Regular.ttf"
 _FONT_BOLD   = _FONTS_DIR / "NotoSansDevanagari-Bold.ttf"
 _LOGO_PATH   = _APP_DIR / "static" / "images" / "logo.jpg"
 
-# Executive Government Color Palette
+# Restrained Government / NIC Color Palette (Version 2.0)
 GOV_NAVY       = colors.HexColor("#0f2942")  # Deep Navy Blue
-GOV_BLUE       = colors.HexColor("#1e3a8a")  # Government Blue
-GOV_LIGHT_BG   = colors.HexColor("#f1f5f9")  # Slate Light Grey
-GOV_ACCENT     = colors.HexColor("#2563eb")  # Vibrant Royal Blue
+GOV_BLUE       = colors.HexColor("#1e3a8a")  # Government Royal Blue
+GOV_LIGHT_BG   = colors.HexColor("#f8fafc")  # Slate Light Grey
+GOV_ACCENT     = colors.HexColor("#2563eb")  # Accent Royal Blue
 SAFFRON        = colors.HexColor("#FF9933")  # Indian Flag Saffron
 INDIA_GREEN    = colors.HexColor("#138808")  # Indian Flag Green
 WHITE          = colors.white
-LIGHT_GREY     = colors.HexColor("#f8fafc")
+LIGHT_GREY     = colors.HexColor("#f1f5f9")
 MID_GREY       = colors.HexColor("#cbd5e1")
+BORDER_GREY    = colors.HexColor("#e2e8f0")
 TEXT_DARK      = colors.HexColor("#0f172a")
 TEXT_MUTED     = colors.HexColor("#475569")
 
-# Badge colors
+# Restrained Badge Colors
 COLOR_APPROVED = colors.HexColor("#15803d")
 COLOR_FLAGGED  = colors.HexColor("#b45309")
 COLOR_PENDING  = colors.HexColor("#1d4ed8")
@@ -71,13 +74,13 @@ _font_registered = False
 
 
 # ─────────────────────────────────────────────
-# Font Setup — Local Embedded TTF Registration
+# Font Setup — Embedded Unicode TTF & HarfBuzz Shaping
 # ─────────────────────────────────────────────
 
 def _ensure_fonts() -> bool:
     """
     Registers local embedded TTF Devanagari fonts with ReportLab.
-    Guarantees 100% Unicode Hindi rendering without boxes or blocks.
+    Guarantees 100% Unicode Hindi rendering.
     """
     global _font_registered
     if _font_registered:
@@ -110,6 +113,13 @@ def _get_font(bold: bool = False) -> str:
     return "Helvetica-Bold" if bold else "Helvetica"
 
 
+def _shape_hi(text: str, font_name: str = "NotoDevanagari", font_size: float = 10.0) -> str:
+    """Returns clean Unicode text string for ReportLab TTFont rendering."""
+    if not text:
+        return ""
+    return str(text)
+
+
 # ─────────────────────────────────────────────
 # Numbered Canvas for "Page X of Y" Footer & Header
 # ─────────────────────────────────────────────
@@ -117,7 +127,7 @@ def _get_font(bold: bool = False) -> str:
 class NumberedCanvas(canvas.Canvas):
     """
     Two-pass canvas to dynamically compute total page count and draw
-    consistent government header/footer on every page.
+    official NIC/Government header and footer on every page.
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -139,37 +149,41 @@ class NumberedCanvas(canvas.Canvas):
         self.saveState()
         fn = _get_font(bold=False)
         fn_bold = _get_font(bold=True)
-        now_str = datetime.now(IST).strftime("%d/%m/%Y %I:%M %p IST")
 
         # Top Header (Only on pages 2+)
         if self._pageNumber > 1:
             self.setFont(fn, 8)
             self.setFillColor(TEXT_MUTED)
-            self.drawString(1.5 * cm, A4[1] - 1.0 * cm, "मध्य प्रदेश शासन  |  शहडोल आंगनवाड़ी डिजिटल सत्यापन एवं निर्णय सहायता प्रणाली (DSS)")
+            header_str = _shape_hi("महिला एवं बाल विकास विभाग, मध्य प्रदेश शासन  |  शहडोल आंगनवाड़ी डिजिटल सत्यापन (DSS)", font_name=fn, font_size=8)
+            self.drawString(1.5 * cm, A4[1] - 1.0 * cm, header_str)
+            
             self.setFont(fn_bold, 8)
-            self.drawRightString(A4[0] - 1.5 * cm, A4[1] - 1.0 * cm, "आधिकारिक शासकीय रिपोर्ट")
-            self.setStrokeColor(MID_GREY)
+            right_header = _shape_hi("आधिकारिक शासकीय प्रतिवेदन", font_name=fn_bold, font_size=8)
+            self.drawRightString(A4[0] - 1.5 * cm, A4[1] - 1.0 * cm, right_header)
+            
+            self.setStrokeColor(BORDER_GREY)
             self.setLineWidth(0.5)
-            self.line(1.5 * cm, A4[1] - 1.2 * cm, A4[0] - 1.5 * cm, A4[1] - 1.2 * cm)
+            self.line(1.5 * cm, A4[1] - 1.15 * cm, A4[0] - 1.5 * cm, A4[1] - 1.15 * cm)
 
-        # Bottom Footer (All Pages)
-        self.setStrokeColor(MID_GREY)
+        # Bottom Official Footer (All Pages)
+        self.setStrokeColor(BORDER_GREY)
         self.setLineWidth(0.5)
         self.line(1.5 * cm, 1.4 * cm, A4[0] - 1.5 * cm, 1.4 * cm)
 
-        self.setFont(fn, 7.5)
+        self.setFont(fn, 8)
         self.setFillColor(TEXT_MUTED)
-        left_footer = f"Generated Automatically by BharatOS AI  |  Generated from WhatsApp Submission Workflow  |  v3.0  |  Confidential"
+        left_footer = _shape_hi("यह प्रतिवेदन BharatOS AI द्वारा स्वतः तैयार किया गया है।  |  महिला एवं बाल विकास विभाग, शहडोल (म.प्र.)  |  गोपनीय (Confidential)", font_name=fn, font_size=8)
         self.drawString(1.5 * cm, 0.9 * cm, left_footer)
 
-        page_str = f"Page {self._pageNumber} of {page_count}"
+        page_str = f"पृष्ठ {self._pageNumber} / {page_count}"
+        page_shaped = _shape_hi(page_str, font_name=fn_bold, font_size=8)
         self.setFont(fn_bold, 8)
-        self.drawRightString(A4[0] - 1.5 * cm, 0.9 * cm, page_str)
+        self.drawRightString(A4[0] - 1.5 * cm, 0.9 * cm, page_shaped)
         self.restoreState()
 
 
 # ─────────────────────────────────────────────
-# Style Builders
+# Style Builders (Version 2.0 Typography Hierarchy)
 # ─────────────────────────────────────────────
 
 def _build_styles() -> dict:
@@ -178,71 +192,71 @@ def _build_styles() -> dict:
     fn_bold = _get_font(bold=True)
 
     return {
-        "gov_top": ParagraphStyle(
-            "gov_top",
-            fontName=fn_bold, fontSize=11, textColor=WHITE,
-            alignment=TA_LEFT, leading=14, spaceAfter=2,
+        "dept_sub": ParagraphStyle(
+            "dept_sub",
+            fontName=fn_bold, fontSize=15, textColor=GOV_BLUE,
+            alignment=TA_LEFT, leading=20, spaceAfter=3,
         ),
-        "gov_title": ParagraphStyle(
-            "gov_title",
-            fontName=fn_bold, fontSize=13.5, textColor=WHITE,
-            alignment=TA_LEFT, leading=16.5, spaceAfter=2,
+        "doc_title": ParagraphStyle(
+            "doc_title",
+            fontName=fn_bold, fontSize=22, textColor=GOV_NAVY,
+            alignment=TA_LEFT, leading=28, spaceAfter=4,
         ),
-        "gov_subtitle": ParagraphStyle(
-            "gov_subtitle",
-            fontName=fn, fontSize=8.5, textColor=colors.HexColor("#cbd5e1"),
-            alignment=TA_LEFT, leading=12,
+        "report_sub": ParagraphStyle(
+            "report_sub",
+            fontName=fn, fontSize=11, textColor=TEXT_MUTED,
+            alignment=TA_LEFT, leading=15,
         ),
         "section_head": ParagraphStyle(
             "section_head",
-            fontName=fn_bold, fontSize=10.5, textColor=GOV_NAVY,
-            spaceBefore=8, spaceAfter=5, leading=13,
+            fontName=fn_bold, fontSize=15, textColor=GOV_BLUE,
+            spaceBefore=10, spaceAfter=6, leading=19,
         ),
         "cell_normal": ParagraphStyle(
             "cell_normal",
-            fontName=fn, fontSize=8, textColor=TEXT_DARK,
-            leading=11,
+            fontName=fn, fontSize=10, textColor=TEXT_DARK,
+            leading=14.5,
         ),
         "cell_bold": ParagraphStyle(
             "cell_bold",
-            fontName=fn_bold, fontSize=8, textColor=TEXT_DARK,
-            leading=11,
+            fontName=fn_bold, fontSize=10, textColor=TEXT_DARK,
+            leading=14.5,
         ),
         "cell_center": ParagraphStyle(
             "cell_center",
-            fontName=fn, fontSize=8, textColor=TEXT_DARK,
-            alignment=TA_CENTER, leading=11,
+            fontName=fn, fontSize=10, textColor=TEXT_DARK,
+            alignment=TA_CENTER, leading=14.5,
         ),
         "cell_header": ParagraphStyle(
             "cell_header",
-            fontName=fn_bold, fontSize=8, textColor=WHITE,
-            alignment=TA_CENTER, leading=11,
+            fontName=fn_bold, fontSize=11, textColor=WHITE,
+            alignment=TA_CENTER, leading=15,
         ),
         "kpi_value": ParagraphStyle(
             "kpi_value",
-            fontName=fn_bold, fontSize=16, textColor=GOV_NAVY,
-            alignment=TA_CENTER, leading=20,
+            fontName=fn_bold, fontSize=18, textColor=GOV_NAVY,
+            alignment=TA_CENTER, leading=22,
         ),
         "kpi_label": ParagraphStyle(
             "kpi_label",
-            fontName=fn_bold, fontSize=7, textColor=TEXT_MUTED,
-            alignment=TA_CENTER, leading=9,
+            fontName=fn_bold, fontSize=9, textColor=TEXT_MUTED,
+            alignment=TA_CENTER, leading=12,
         ),
         "rec_item": ParagraphStyle(
             "rec_item",
-            fontName=fn, fontSize=8, textColor=TEXT_DARK,
-            leading=11, spaceAfter=2,
+            fontName=fn, fontSize=10, textColor=TEXT_DARK,
+            leading=14.5, spaceAfter=3,
         ),
         "sign_label": ParagraphStyle(
             "sign_label",
-            fontName=fn, fontSize=7.5, textColor=TEXT_MUTED,
-            alignment=TA_CENTER, leading=11,
+            fontName=fn, fontSize=9.5, textColor=TEXT_DARK,
+            alignment=TA_CENTER, leading=14,
         ),
     }
 
 
 # ═════════════════════════════════════════════════════════════════════
-# MAIN PDF GENERATION FUNCTION
+# MAIN PDF GENERATION FUNCTION (VERSION 2.0 DESIGN)
 # ═════════════════════════════════════════════════════════════════════
 
 def generate_daily_report_pdf(
@@ -256,6 +270,8 @@ def generate_daily_report_pdf(
     """
     Generates an Official Executive Government A4 PDF Report suitable for
     CEO Zila Panchayat & District Collector presentation.
+
+    Version 2.0: Restrained NIC Official Styling & Devanagari Text Shaping.
 
     Args:
         report_date:    Display date string (DD/MM/YYYY)
@@ -292,28 +308,50 @@ def generate_daily_report_pdf(
     story = []
     page_w = A4[0] - 3.0 * cm   # 18.0 cm usable width
 
-    # ── 1. TOP ANNOUNCEMENT BAR ───────────────────────────────────────
-    top_notice = Paragraph(
-        "🤖 <b>AI Generated Government Pilot Report</b> | Auto Generated — No Manual Editing",
-        ParagraphStyle("top_notice", parent=S["cell_center"], fontSize=7.5, textColor=WHITE, fontName=_get_font(bold=True))
-    )
-    top_notice_table = Table([[top_notice]], colWidths=[page_w], rowHeights=[14])
-    top_notice_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), GOV_NAVY),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 1),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-    ]))
-    story.append(top_notice_table)
-    story.append(Spacer(1, 3))
+    # ── 1. HEADER SECTION — RESTRAINED GOVERNMENT DESIGN (VERSION 2.0) ───
+    logo_img = None
+    if _LOGO_PATH.exists():
+        try:
+            logo_img = Image(str(_LOGO_PATH), width=1.8 * cm, height=1.8 * cm)
+        except Exception as e:
+            logger.warning("logo_load_failed", error=str(e))
 
-    # ── 1. TRICOLOR HEADER ACCENT STRIP ────────────────────────────
+    if settings.demo_mode:
+        dept_str = _shape_hi("महिला एवं बाल विकास विभाग, मध्य प्रदेश शासन", font_name=_get_font(bold=True), font_size=15)
+        title_str = _shape_hi("शहडोल आंगनवाड़ी डिजिटल सत्यापन एवं निर्णय सहायता प्रणाली (DSS)", font_name=_get_font(bold=True), font_size=20)
+        sub_title_str = _shape_hi("आंगनवाड़ी डिजिटल सत्यापन प्रतिवेदन <font size=9 color='#92400e'>(पायलट प्रदर्शन हेतु)</font>", font_name=_get_font(bold=True), font_size=12)
+    else:
+        dept_str = _shape_hi("महिला एवं बाल विकास विभाग, मध्य प्रदेश शासन", font_name=_get_font(bold=True), font_size=15)
+        title_str = _shape_hi("भारतओएस — शहडोल आंगनवाड़ी डिजिटल सत्यापन एवं निर्णय सहायता प्रणाली (DSS)", font_name=_get_font(bold=True), font_size=22)
+        sub_title_str = _shape_hi("दैनिक कार्यकारी सत्यापन एवं निर्णय सहायता प्रतिवेदन (Official Decision Support Report)", font_name=_get_font(bold=False), font_size=11)
+
+    title_text = [
+        Paragraph(dept_str, S["dept_sub"]),
+        Paragraph(title_str, S["doc_title"]),
+        Paragraph(sub_title_str, S["report_sub"]),
+    ]
+
+    if logo_img:
+        header_table = Table([[logo_img, title_text]], colWidths=[2.2 * cm, page_w - 2.2 * cm])
+    else:
+        header_table = Table([[title_text]], colWidths=[page_w])
+
+    header_table.setStyle(TableStyle([
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+    ]))
+    story.append(header_table)
+    story.append(Spacer(1, 4))
+
+    # ── TRICOLOR SUBTLE ACCENT STRIP ────────────────────────────────
     strip_data = [["", "", ""]]
-    strip_table = Table(strip_data, colWidths=[page_w / 3] * 3, rowHeights=[4])
+    strip_table = Table(strip_data, colWidths=[page_w / 3] * 3, rowHeights=[3.5])
     strip_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (0, 0), SAFFRON),
-        ("BACKGROUND", (1, 0), (1, 0), WHITE),
+        ("BACKGROUND", (1, 0), (1, 0), BORDER_GREY),
         ("BACKGROUND", (2, 0), (2, 0), INDIA_GREEN),
         ("TOPPADDING",    (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
@@ -321,71 +359,49 @@ def generate_daily_report_pdf(
         ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
     ]))
     story.append(strip_table)
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 6))
 
-    # ── 2. GOVERNMENT COVER HEADER BLOCK (WITH LOGO ~20% SMALLER) ──
-    logo_img = None
-    if _LOGO_PATH.exists():
-        try:
-            # Scaled down ~20% for optimal text layout
-            logo_img = Image(str(_LOGO_PATH), width=1.9 * cm, height=1.9 * cm)
-        except Exception as e:
-            logger.warning("logo_load_failed", error=str(e))
-
-    title_text = [
-        Paragraph("मध्य प्रदेश शासन  |  Government of Madhya Pradesh", S["gov_top"]),
-        Paragraph("शहडोल आंगनवाड़ी डिजिटल सत्यापन एवं निर्णय सहायता प्रणाली (DSS)", S["gov_title"]),
-        Paragraph("<b>BharatOS Digital Governance Platform</b>  |  Pilot Demonstration Report (For Demonstration Purpose)", S["gov_subtitle"]),
-    ]
-
-    if logo_img:
-        header_table = Table([[logo_img, title_text]], colWidths=[2.3 * cm, page_w - 2.3 * cm])
+    # ── 2. METADATA SUB-BAR ─────────────────────────────────────────
+    if settings.demo_mode:
+        filter_str = f"केंद्र: {settings.demo_center_name}  |  AWC ID: {settings.demo_awc_id}"
     else:
-        header_table = Table([[title_text]], colWidths=[page_w])
+        filter_str = f"ब्लॉक: {block_name}" if block_name else "समस्त जिला शहडोल"
+        if status_filter:
+            filter_str += f" | स्थिति: {status_filter}"
 
-    header_table.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, -1), GOV_NAVY),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
-    ]))
-    story.append(header_table)
-    story.append(Spacer(1, 5))
+    time_display = now_ist.strftime("%I:%M %p IST")
+    doc_id_label = _shape_hi("<b>Document ID:</b>", font_name=_get_font(), font_size=10)
+    rpt_date_label = _shape_hi(f"<b>रिपोर्ट तिथि:</b> {report_date}  |  {filter_str}", font_name=_get_font(), font_size=10)
+    gen_time_label = _shape_hi(f"<b>उत्पन्न समय:</b> {time_display}", font_name=_get_font(), font_size=10)
 
-    # ── 3. METADATA SUB-BAR (WITH TRACKING DOC ID & ENHANCED TIME) ──
-    filter_str = f"ब्लॉक: {block_name}" if block_name else "समस्त जिला शहडोल"
-    if status_filter:
-        filter_str += f" | स्थिति: {status_filter}"
-
-    time_display = now_ist.strftime('%I:%M %p IST')
     meta_data = [[
-        Paragraph(f"<b>Document ID:</b> <font color='#0f2942'><b>{doc_id}</b></font>", S["cell_normal"]),
-        Paragraph(f"<b>रिपोर्ट तिथि:</b> {report_date}  |  {filter_str}", S["cell_normal"]),
-        Paragraph(f"<b>उत्पन्न समय:</b> <font size=8.5 color='#0f2942'><b>{time_display}</b></font>", S["cell_center"]),
+        Paragraph(f"{doc_id_label} <font color='#0f2942'><b>{doc_id}</b></font>", S["cell_normal"]),
+        Paragraph(rpt_date_label, S["cell_normal"]),
+        Paragraph(gen_time_label, S["cell_center"]),
     ]]
     meta_table = Table(meta_data, colWidths=[page_w * 0.32, page_w * 0.43, page_w * 0.25])
     meta_table.setStyle(TableStyle([
         ("BACKGROUND",    (0, 0), (-1, -1), GOV_LIGHT_BG),
-        ("LINEABOVE",     (0, 0), (-1, 0), 1, GOV_NAVY),
-        ("LINEBELOW",     (0, -1), (-1, -1), 1, GOV_NAVY),
-        ("TOPPADDING",    (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
-        ("FONTNAME",      (0, 0), (-1, -1), _get_font()),
+        ("BOX",           (0, 0), (-1, -1), 0.5, BORDER_GREY),
+        ("TOPPADDING",    (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
     ]))
     story.append(meta_table)
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 10))
 
-    # ── 4. PRIORITY 3: EXECUTIVE SUMMARY KPI CARDS (6 CARDS) ───────
-    story.append(Paragraph("📊  कार्यकारी सारांश (Executive Summary — KPI Cards)", S["section_head"]))
+    # ── 3. EXECUTIVE SUMMARY KPI CARDS ──────────────────────────────
+    kpi_head_str = _shape_hi("📊  कार्यकारी सारांश (Executive Summary — KPI Cards)", font_name=_get_font(bold=True), font_size=15)
+    story.append(Paragraph(kpi_head_str, S["section_head"]))
 
-    total_awc = TOTAL_AWC_SHAHDOL
+    if settings.demo_mode:
+        total_awc = 1
+    else:
+        total_awc = TOTAL_AWC_SHAHDOL
+
     reports_rec = stats.get("reported_today", len(submissions))
 
-    # Correct verified / approved / flagged logic
     if len(submissions) > 0:
         approved = sum(1 for s in submissions if getattr(s, "status", "") in ("APPROVED", "PROCESSED") or (getattr(s, "is_authorized", False) and getattr(s, "status", "") != "FLAGGED"))
         flagged = sum(1 for s in submissions if getattr(s, "status", "") == "FLAGGED")
@@ -403,45 +419,112 @@ def generate_daily_report_pdf(
     if cov_pct is None or cov_pct == 0:
         cov_pct = round((reports_rec / total_awc) * 100, 1) if total_awc > 0 else 0.0
 
-    kpi_col = page_w / 6.0
-    kpi_data = [
-        [
-            Paragraph(f"<b>{total_awc:,}</b>", S["kpi_value"]),
-            Paragraph(f"<b>{reports_rec}</b>", S["kpi_value"]),
-            Paragraph(f"<b>{approved}</b>", ParagraphStyle("green_kpi", parent=S["kpi_value"], textColor=COLOR_APPROVED)),
-            Paragraph(f"<b>{flagged}</b>", ParagraphStyle("amber_kpi", parent=S["kpi_value"], textColor=COLOR_FLAGGED)),
-            Paragraph(f"<b>{pending_centres:,}</b>", ParagraphStyle("blue_kpi", parent=S["kpi_value"], textColor=COLOR_PENDING)),
-            Paragraph(f"<b>{cov_pct}%</b>", ParagraphStyle("navy_kpi", parent=S["kpi_value"], textColor=GOV_NAVY)),
-        ],
-        [
-            Paragraph("कुल केंद्र<br/>(Total Centres)", S["kpi_label"]),
-            Paragraph("प्राप्त रिपोर्ट<br/>(Reports Recd)", S["kpi_label"]),
-            Paragraph("सत्यापित / स्वीकृत<br/>(Verified)", S["kpi_label"]),
-            Paragraph("फ्लैग्ड<br/>(Flagged)", S["kpi_label"]),
-            Paragraph("अनरिपोर्टेड<br/>(Pending)", S["kpi_label"]),
-            Paragraph("रिपोर्टिंग %<br/>(Reporting %)", S["kpi_label"]),
-        ],
-    ]
+    if settings.demo_mode:
+        # 5 KPI Cards for Single Anganwadi Demo
+        kpi_col = page_w / 5.0
+        l_tot = _shape_hi("कुल केंद्र<br/>(Total Centres)", font_name=_get_font(bold=True), font_size=9)
+        l_rec = _shape_hi("आज प्राप्त रिपोर्ट<br/>(Reports Recd)", font_name=_get_font(bold=True), font_size=9)
+        l_app = _shape_hi("AI द्वारा सत्यापित<br/>(AI Verified)", font_name=_get_font(bold=True), font_size=9)
+        l_flg = _shape_hi("समीक्षा आवश्यक<br/>(Review Req)", font_name=_get_font(bold=True), font_size=9)
+        l_cov = _shape_hi("रिपोर्टिंग प्रतिशत<br/>(Reporting %)", font_name=_get_font(bold=True), font_size=9)
 
-    kpi_table = Table(kpi_data, colWidths=[kpi_col] * 6, rowHeights=[24, 20])
-    kpi_table.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (0, -1), colors.HexColor("#eff6ff")),
-        ("BACKGROUND",    (1, 0), (1, -1), colors.HexColor("#f0fdf4")),
-        ("BACKGROUND",    (2, 0), (2, -1), colors.HexColor("#dcfce7")),
-        ("BACKGROUND",    (3, 0), (3, -1), colors.HexColor("#fef3c7")),
-        ("BACKGROUND",    (4, 0), (4, -1), colors.HexColor("#fee2e2")),
-        ("BACKGROUND",    (5, 0), (5, -1), colors.HexColor("#f5f3ff")),
-        ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        ("GRID",          (0, 0), (-1, -1), 0.5, MID_GREY),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("FONTNAME",      (0, 0), (-1, -1), _get_font()),
-    ]))
-    story.append(kpi_table)
-    story.append(Spacer(1, 8))
+        kpi_data = [
+            [
+                Paragraph(f"<b>{total_awc:,}</b>", S["kpi_value"]),
+                Paragraph(f"<b>{reports_rec}</b>", S["kpi_value"]),
+                Paragraph(f"<b>{approved}</b>", ParagraphStyle("green_kpi", parent=S["kpi_value"], textColor=COLOR_APPROVED)),
+                Paragraph(f"<b>{flagged}</b>", ParagraphStyle("amber_kpi", parent=S["kpi_value"], textColor=COLOR_FLAGGED)),
+                Paragraph(f"<b>{cov_pct}%</b>", ParagraphStyle("navy_kpi", parent=S["kpi_value"], textColor=GOV_NAVY)),
+            ],
+            [
+                Paragraph(l_tot, S["kpi_label"]),
+                Paragraph(l_rec, S["kpi_label"]),
+                Paragraph(l_app, S["kpi_label"]),
+                Paragraph(l_flg, S["kpi_label"]),
+                Paragraph(l_cov, S["kpi_label"]),
+            ],
+        ]
+        kpi_table = Table(kpi_data, colWidths=[kpi_col] * 5, rowHeights=[26, 22])
+        kpi_table.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (0, -1), colors.HexColor("#f1f5f9")),
+            ("BACKGROUND",    (1, 0), (1, -1), colors.HexColor("#f0fdf4")),
+            ("BACKGROUND",    (2, 0), (2, -1), colors.HexColor("#dcfce7")),
+            ("BACKGROUND",    (3, 0), (3, -1), colors.HexColor("#fffbeb")),
+            ("BACKGROUND",    (4, 0), (4, -1), colors.HexColor("#f5f3ff")),
+            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID",          (0, 0), (-1, -1), 0.5, BORDER_GREY),
+            ("TOPPADDING",    (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(kpi_table)
+        story.append(Spacer(1, 8))
 
-    # ── 5. PRIORITY 4: AI FINDINGS SECTION & PRIORITY 5: AI RECOMMENDATIONS ───
+        # ── MANDATORY SINGLE AWC DEMO NOTICE BOX ───────────────────
+        demo_notice_str = _shape_hi(
+            "<b>📌 नोट:</b> यह प्रतिवेदन पायलट प्रदर्शन हेतु एकल आंगनवाड़ी के वास्तविक डेटा पर आधारित है।",
+            font_name=_get_font(bold=False), font_size=10
+        )
+        notice_data = [[Paragraph(f"<font color='#92400e'>{demo_notice_str}</font>", S["cell_normal"])]]
+        notice_table = Table(notice_data, colWidths=[page_w])
+        notice_table.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, -1), colors.HexColor("#fefce8")),
+            ("BOX",           (0, 0), (-1, -1), 0.8, colors.HexColor("#d97706")),
+            ("TOPPADDING",    (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
+        ]))
+        story.append(notice_table)
+        story.append(Spacer(1, 10))
+
+    else:
+        # Standard 6 KPI Cards for District Mode
+        kpi_col = page_w / 6.0
+        l_tot = _shape_hi("कुल केंद्र<br/>(Total Centres)", font_name=_get_font(bold=True), font_size=9)
+        l_rec = _shape_hi("प्राप्त रिपोर्ट<br/>(Reports Recd)", font_name=_get_font(bold=True), font_size=9)
+        l_app = _shape_hi("सत्यापित / स्वीकृत<br/>(Verified)", font_name=_get_font(bold=True), font_size=9)
+        l_flg = _shape_hi("फ्लैग्ड<br/>(Flagged)", font_name=_get_font(bold=True), font_size=9)
+        l_pnd = _shape_hi("अनरिपोर्टेड<br/>(Pending)", font_name=_get_font(bold=True), font_size=9)
+        l_cov = _shape_hi("रिपोर्टिंग %<br/>(Reporting %)", font_name=_get_font(bold=True), font_size=9)
+
+        kpi_data = [
+            [
+                Paragraph(f"<b>{total_awc:,}</b>", S["kpi_value"]),
+                Paragraph(f"<b>{reports_rec}</b>", S["kpi_value"]),
+                Paragraph(f"<b>{approved}</b>", ParagraphStyle("green_kpi", parent=S["kpi_value"], textColor=COLOR_APPROVED)),
+                Paragraph(f"<b>{flagged}</b>", ParagraphStyle("amber_kpi", parent=S["kpi_value"], textColor=COLOR_FLAGGED)),
+                Paragraph(f"<b>{pending_centres:,}</b>", ParagraphStyle("red_kpi", parent=S["kpi_value"], textColor=COLOR_REJECTED)),
+                Paragraph(f"<b>{cov_pct}%</b>", ParagraphStyle("navy_kpi", parent=S["kpi_value"], textColor=GOV_NAVY)),
+            ],
+            [
+                Paragraph(l_tot, S["kpi_label"]),
+                Paragraph(l_rec, S["kpi_label"]),
+                Paragraph(l_app, S["kpi_label"]),
+                Paragraph(l_flg, S["kpi_label"]),
+                Paragraph(l_pnd, S["kpi_label"]),
+                Paragraph(l_cov, S["kpi_label"]),
+            ],
+        ]
+
+        kpi_table = Table(kpi_data, colWidths=[kpi_col] * 6, rowHeights=[26, 22])
+        kpi_table.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (0, -1), colors.HexColor("#f1f5f9")),
+            ("BACKGROUND",    (1, 0), (1, -1), colors.HexColor("#f0fdf4")),
+            ("BACKGROUND",    (2, 0), (2, -1), colors.HexColor("#dcfce7")),
+            ("BACKGROUND",    (3, 0), (3, -1), colors.HexColor("#fffbeb")),
+            ("BACKGROUND",    (4, 0), (4, -1), colors.HexColor("#fff1f2")),
+            ("BACKGROUND",    (5, 0), (5, -1), colors.HexColor("#f5f3ff")),
+            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID",          (0, 0), (-1, -1), 0.5, BORDER_GREY),
+            ("TOPPADDING",    (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(kpi_table)
+        story.append(Spacer(1, 10))
+
+    # ── 4. AI FINDINGS SECTION & CEO RECOMMENDATION BOX ──────────────
     total_children_detected = 0
     blur_count = 0
     duplicate_count = 0
@@ -487,19 +570,19 @@ def generate_daily_report_pdf(
     gps_str = f"{gps_count}/{len(submissions)} केंद्र" if len(submissions) > 0 else "N/A"
 
     ai_findings_headers = [
-        Paragraph("मीट्रिक (AI Metric)", S["cell_header"]),
-        Paragraph("परिणाम (Result)", S["cell_header"]),
-        Paragraph("स्थिति / टिप्पणी (Note)", S["cell_header"]),
+        Paragraph(_shape_hi("मीट्रिक (AI Metric)", font_name=_get_font(bold=True), font_size=11), S["cell_header"]),
+        Paragraph(_shape_hi("परिणाम (Result)", font_name=_get_font(bold=True), font_size=11), S["cell_header"]),
+        Paragraph(_shape_hi("स्थिति / विवरण (Note)", font_name=_get_font(bold=True), font_size=11), S["cell_header"]),
     ]
     ai_findings_rows = [
         ai_findings_headers,
-        [Paragraph("<b>AI विज़न इंजन (AI Engine)</b>", S["cell_normal"]), Paragraph("OpenCV + Vision ML", S["cell_center"]), Paragraph("बहु-मॉडल दृष्टि सत्यापन पाइपलाइन", S["cell_normal"])],
-        [Paragraph("<b>उपस्थित बच्चे (Children Detected)</b>", S["cell_normal"]), Paragraph(children_str, S["cell_center"]), Paragraph("ML Object Counter पहचान", S["cell_normal"])],
-        [Paragraph("<b>धुंधली फोटो (Blur Images)</b>", S["cell_normal"]), Paragraph(blur_str, S["cell_center"]), Paragraph("OpenCV Laplacian Variance टेस्ट", S["cell_normal"])],
-        [Paragraph("<b>पुनरावृत्ति फोटो (Duplicate Images)</b>", S["cell_normal"]), Paragraph(duplicate_str, S["cell_center"]), Paragraph("Perceptual Image Hash (pHash) जांच", S["cell_normal"])],
-        [Paragraph("<b>भोजन उपस्थिति (Meal Detection)</b>", S["cell_normal"]), Paragraph(meal_str, S["cell_center"]), Paragraph("ML Meal Classifier विजुअल पुष्टि", S["cell_normal"])],
-        [Paragraph("<b>GPS लोकेशन (GPS Available)</b>", S["cell_normal"]), Paragraph(gps_str, S["cell_center"]), Paragraph("EXIF Metatags भू-स्थानिक निर्देशांक", S["cell_normal"])],
-        [Paragraph("<b>औसत AI विश्वास (Average Confidence)</b>", S["cell_normal"]), Paragraph(avg_confidence, S["cell_center"]), Paragraph("AI मॉडल औसत विश्वास दर", S["cell_normal"])],
+        [Paragraph(_shape_hi("<b>AI इंजन (AI Engine)</b>"), S["cell_normal"]), Paragraph(_shape_hi("Multi-Vision AI"), S["cell_center"]), Paragraph(_shape_hi("Groq & Gemini विज़न इंजन"), S["cell_normal"])],
+        [Paragraph(_shape_hi("<b>उपस्थित बच्चे (Children)</b>"), S["cell_normal"]), Paragraph(_shape_hi(children_str), S["cell_center"]), Paragraph(_shape_hi("ML Object Counter गणना"), S["cell_normal"])],
+        [Paragraph(_shape_hi("<b>धुंधली फोटो (Blur Images)</b>"), S["cell_normal"]), Paragraph(_shape_hi(blur_str), S["cell_center"]), Paragraph(_shape_hi("Laplacian Variance फ़िल्टर"), S["cell_normal"])],
+        [Paragraph(_shape_hi("<b>डुप्लिकेट फोटो (Duplicate)</b>"), S["cell_normal"]), Paragraph(_shape_hi(duplicate_str), S["cell_center"]), Paragraph(_shape_hi("pHash perceptual हैश जांच"), S["cell_normal"])],
+        [Paragraph(_shape_hi("<b>भोजन पहचान (Meal Detection)</b>"), S["cell_normal"]), Paragraph(_shape_hi(meal_str), S["cell_center"]), Paragraph(_shape_hi("ML भोजन उपस्थिति सत्यापन"), S["cell_normal"])],
+        [Paragraph(_shape_hi("<b>GPS उपलब्धता (GPS)</b>"), S["cell_normal"]), Paragraph(_shape_hi(gps_str), S["cell_center"]), Paragraph(_shape_hi("EXIF भू-स्थानिक निर्देशांक"), S["cell_normal"])],
+        [Paragraph(_shape_hi("<b>विश्वास स्तर (Confidence)</b>"), S["cell_normal"]), Paragraph(_shape_hi(avg_confidence), S["cell_center"]), Paragraph(_shape_hi("एआई मॉडल औसत विश्वास दर"), S["cell_normal"])],
     ]
 
     col_w_findings = [page_w * 0.20, page_w * 0.12, page_w * 0.17]
@@ -508,44 +591,42 @@ def generate_daily_report_pdf(
         ("BACKGROUND",    (0, 0), (-1, 0), GOV_BLUE),
         ("TEXTCOLOR",     (0, 0), (-1, 0), WHITE),
         ("ALIGN",         (1, 1), (1, -1), "CENTER"),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GREY]),
-        ("GRID",          (0, 0), (-1, -1), 0.5, MID_GREY),
-        ("TOPPADDING",    (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 5),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 5),
-        ("FONTNAME",      (0, 0), (-1, -1), _get_font()),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, GOV_LIGHT_BG]),
+        ("GRID",          (0, 0), (-1, -1), 0.5, BORDER_GREY),
+        ("TOPPADDING",    (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
     ]))
 
     rec_paragraphs = []
     if flagged == 0:
-        rec_paragraphs.append(Paragraph("<b>✔ No Action Required:</b> समस्त प्राप्त प्रेषण AI मानकों के अनुरूप पाए गए।", S["rec_item"]))
+        rec_paragraphs.append(Paragraph(_shape_hi("<b>✔ सामान्य स्थिति (No Action Required):</b> समस्त प्रेषित फोटो AI सत्यापन मानकों के अनुरूप पाए गए।"), S["rec_item"]))
     else:
-        rec_paragraphs.append(Paragraph(f"<b>⚠ Re-inspection Required:</b> {flagged} केंद्रों की प्रविष्टियों में विसंगतियां पाई गईं — पर्यवेक्षक समीक्षा आवश्यक।", S["rec_item"]))
+        rec_paragraphs.append(Paragraph(_shape_hi(f"<b>⚠ समीक्षा आवश्यक (Re-inspection):</b> {flagged} केंद्रों की प्रविष्टियों में विसंगति पाई गई — पर्यवेक्षक समीक्षा आवश्यक।"), S["rec_item"]))
 
     if blur_count > 0:
-        rec_paragraphs.append(Paragraph(f"<b>⚠ Photo Quality Poor:</b> {blur_count} केंद्रों द्वारा प्रेषित फोटो धुंधली पाई गईं। कार्यकर्ता को पुनः स्पष्ट फोटो भेजने के निर्देश दें।", S["rec_item"]))
+        rec_paragraphs.append(Paragraph(_shape_hi(f"<b>⚠ फोटो गुणवत्ता अस्पष्ट:</b> {blur_count} फोटो अत्यधिक धुंधली पाई गईं — पुनः स्पष्ट फोटो प्रेषण का निर्देश दें।"), S["rec_item"]))
 
     if duplicate_count > 0:
-        rec_paragraphs.append(Paragraph(f"<b>⚠ Duplicate Submission:</b> {duplicate_count} प्रेषणों में पुरानी या दोहराई गई फोटो पाई गई — जवाबदेही तय की जाए।", S["rec_item"]))
+        rec_paragraphs.append(Paragraph(_shape_hi(f"<b>⚠ पुनरावृत्ति प्रेषण (Duplicate):</b> {duplicate_count} फोटो पुरानी पाई गईं — जवाबदेही तय की जाए।"), S["rec_item"]))
 
-    rec_paragraphs.append(Paragraph("<b>✔ Instant Verification:</b> AI सत्यापन के पश्चात व्हाट्सएप पर 100% स्वतः रसीद प्रेषित की गई।", S["rec_item"]))
+    rec_paragraphs.append(Paragraph(_shape_hi("<b>✔ स्वचालित पावती (Auto Ack):</b> AI सत्यापन पश्चात व्हाट्सएप पर 100% पावती प्रेषित की गई।"), S["rec_item"]))
 
     rec_box_table = Table([[rec_paragraphs]], colWidths=[page_w * 0.48])
     rec_box_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fffbeb")),
-        ("BOX",        (0, 0), (-1, -1), 1, colors.HexColor("#f59e0b")),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("FONTNAME",   (0, 0), (-1, -1), _get_font()),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fefce8")),
+        ("BOX",        (0, 0), (-1, -1), 1, colors.HexColor("#d97706")),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
     ]))
 
     side_by_side_table = Table([
         [
-            Paragraph("<b>🤖 AI सत्यापन सारांश (AI Findings)</b>", S["section_head"]),
-            Paragraph("<b>🧠 CEO निर्णय सहायता (AI Recommendations)</b>", S["section_head"]),
+            Paragraph(_shape_hi("🤖 AI सत्यापन सारांश (AI Findings)", font_name=_get_font(bold=True), font_size=15), S["section_head"]),
+            Paragraph(_shape_hi("🧠 CEO निर्णय सहायता (Recommendations)", font_name=_get_font(bold=True), font_size=15), S["section_head"]),
         ],
         [
             ai_table,
@@ -559,30 +640,27 @@ def generate_daily_report_pdf(
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
         ("TOPPADDING", (0, 0), (-1, -1), 1),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-        ("FONTNAME", (0, 0), (-1, -1), _get_font()),
     ]))
 
     story.append(side_by_side_table)
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 10))
 
-    # ── 6. PRIORITY 6: IMPROVED SUBMISSION DETAIL TABLE ────────────
+    # ── 5. SUBMISSION DETAIL TABLE (CLEAN HINDI HEADING & RESTRAINED BADGES) ──
     max_rows = 25
     display_submissions = submissions[:max_rows]
     overflow = len(submissions) - max_rows if len(submissions) > max_rows else 0
 
-    story.append(Paragraph(
-        f"📋  आंगनवाड़ी केंद्र प्रेषण विवरण (Detailed AWC Submissions — {min(len(submissions), max_rows)} रिकॉर्ड)",
-        S["section_head"]
-    ))
+    detail_head_str = _shape_hi(f"📋  आंगनवाड़ी केंद्र प्रेषण विवरण (Detailed AWC Submissions — {min(len(submissions), max_rows)} रिकॉर्ड)", font_name=_get_font(bold=True), font_size=15)
+    story.append(Paragraph(detail_head_str, S["section_head"]))
 
     sub_headers = [
-        Paragraph("AWC ID",         S["cell_header"]),
-        Paragraph("केंद्र का नाम",     S["cell_header"]),
-        Paragraph("कार्यकर्ता नाम",    S["cell_header"]),
-        Paragraph("समय (IST)",       S["cell_header"]),
-        Paragraph("स्थिति",          S["cell_header"]),
-        Paragraph("AI परिणाम",       S["cell_header"]),
-        Paragraph("अभ्युक्ति / निर्णय", S["cell_header"]),
+        Paragraph(_shape_hi("AWC ID", font_name=_get_font(bold=True), font_size=11),         S["cell_header"]),
+        Paragraph(_shape_hi("केंद्र का नाम", font_name=_get_font(bold=True), font_size=11),     S["cell_header"]),
+        Paragraph(_shape_hi("कार्यकर्ता नाम", font_name=_get_font(bold=True), font_size=11),    S["cell_header"]),
+        Paragraph(_shape_hi("समय (IST)", font_name=_get_font(bold=True), font_size=11),       S["cell_header"]),
+        Paragraph(_shape_hi("स्थिति", font_name=_get_font(bold=True), font_size=11),          S["cell_header"]),
+        Paragraph(_shape_hi("AI निष्कर्ष", font_name=_get_font(bold=True), font_size=11),       S["cell_header"]),
+        Paragraph(_shape_hi("अभ्युक्ति / निर्णय", font_name=_get_font(bold=True), font_size=11), S["cell_header"]),
     ]
     sub_rows = [sub_headers]
 
@@ -609,27 +687,33 @@ def generate_daily_report_pdf(
             ParagraphStyle("st_p", parent=S["cell_center"], textColor=st_color, fontName=_get_font(bold=True))
         )
 
-        ai_res = getattr(s, "ai_score", None) or ("सत्यापित" if disp_st == "APPROVED" else "प्रक्रियाधीन")
+        raw_ai = str(getattr(s, "ai_score", None) or ("सत्यापित" if disp_st == "APPROVED" else "प्रक्रियाधीन"))
+        clean_ai = raw_ai.replace("Groq AI:", "").replace("Groq AI", "").strip()
+        ai_res_shaped = _shape_hi(clean_ai)
+
         flag_reason = getattr(s, "flag_reason", None) or "—"
         if disp_st == "APPROVED":
-            remarks = "स्वीकृत एवं सत्यापित"
+            remarks_str = "स्वीकृत एवं सत्यापित"
         elif disp_st == "FLAGGED":
-            remarks = f"फ्लैग: {flag_reason}"
+            remarks_str = f"फ्लैग: {flag_reason}"
         else:
-            remarks = "प्राप्त (समीक्षा हेतु)"
+            remarks_str = "प्राप्त (समीक्षा हेतु)"
+        
+        remarks_shaped = _shape_hi(remarks_str)
 
         sub_rows.append([
-            Paragraph(getattr(s, "awc_id", "") or "—",      S["cell_bold"]),
-            Paragraph(getattr(s, "center_name", "") or "—",  S["cell_normal"]),
-            Paragraph(getattr(s, "worker_name", "") or "—",  S["cell_normal"]),
-            Paragraph(ts or "—",                              S["cell_center"]),
+            Paragraph(_shape_hi(getattr(s, "awc_id", "") or "—"),      S["cell_bold"]),
+            Paragraph(_shape_hi(getattr(s, "center_name", "") or "—"),  S["cell_normal"]),
+            Paragraph(_shape_hi(getattr(s, "worker_name", "") or "—"),  S["cell_normal"]),
+            Paragraph(_shape_hi(ts or "—"),                              S["cell_center"]),
             st_paragraph,
-            Paragraph(str(ai_res),                           S["cell_center"]),
-            Paragraph(remarks,                                S["cell_normal"]),
+            Paragraph(ai_res_shaped,                                    S["cell_center"]),
+            Paragraph(remarks_shaped,                                   S["cell_normal"]),
         ])
 
     if len(sub_rows) == 1:
-        sub_rows.append([Paragraph("आज कोई सबमिशन प्राप्त नहीं हुआ", S["cell_normal"]), "", "", "", "", "", ""])
+        empty_msg = _shape_hi("आज कोई सबमिशन प्राप्त नहीं हुआ")
+        sub_rows.append([Paragraph(empty_msg, S["cell_normal"]), "", "", "", "", "", ""])
 
     s_cols = [
         page_w * 0.14,   # AWC ID
@@ -646,29 +730,30 @@ def generate_daily_report_pdf(
         ("BACKGROUND",    (0, 0), (-1, 0), GOV_NAVY),
         ("TEXTCOLOR",     (0, 0), (-1, 0), WHITE),
         ("ALIGN",         (0, 0), (-1, 0), "CENTER"),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GREY]),
-        ("GRID",          (0, 0), (-1, -1), 0.4, MID_GREY),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-        ("FONTNAME",      (0, 0), (-1, -1), _get_font()),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, GOV_LIGHT_BG]),
+        ("GRID",          (0, 0), (-1, -1), 0.5, BORDER_GREY),
+        ("TOPPADDING",    (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 5),
     ]))
     story.append(sub_table)
 
     if overflow > 0:
         story.append(Spacer(1, 4))
-        story.append(Paragraph(
-            f"... और {overflow} अतिरिक्त रिकॉर्ड — पूर्ण डेटा के लिए डैशबोर्ड या CSV डाउनलोड देखें।",
-            S["cell_normal"]
-        ))
+        overflow_str = _shape_hi(f"... और {overflow} अतिरिक्त रिकॉर्ड — पूर्ण डेटा के लिए डैशबोर्ड या CSV डाउनलोड देखें।")
+        story.append(Paragraph(overflow_str, S["cell_normal"]))
 
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 12))
 
-    # ── 7. OFFICIAL SIGN-OFF BLOCK ──────────────────────────────────
+    # ── 6. OFFICIAL SIGNATURE SECTION ──────────────────────────────
+    sig1 = _shape_hi("<b>सेक्टर पर्यवेक्षक</b><br/>सोहागपुर ब्लॉक, जिला शहडोल", font_name=_get_font(), font_size=9.5)
+    sig2 = _shape_hi("<b>बाल विकास परियोजना अधिकारी (CDPO)</b><br/>महिला एवं बाल विकास विभाग, शहडोल", font_name=_get_font(), font_size=9.5)
+    sig3 = _shape_hi("<b>DPO / CEO जिला पंचायत</b><br/>जिला शहडोल (मध्य प्रदेश)", font_name=_get_font(), font_size=9.5)
+
     story.append(KeepTogether([
         HRFlowable(width=page_w, thickness=0.8, color=GOV_NAVY),
-        Spacer(1, 4),
+        Spacer(1, 6),
         Table([
             [
                 Paragraph("___________________________", S["sign_label"]),
@@ -676,15 +761,14 @@ def generate_daily_report_pdf(
                 Paragraph("___________________________", S["sign_label"]),
             ],
             [
-                Paragraph("<b>सेक्टर सुपरवाइजर</b><br/>सोहागपुर ब्लॉक, जिला शहडोल", S["sign_label"]),
-                Paragraph("<b>CDPO शहडोल</b><br/>महिला एवं बाल विकास विभाग", S["sign_label"]),
-                Paragraph("<b>DPO / CEO जिला पंचायत</b><br/>जिला शहडोल (म.प्र.)", S["sign_label"]),
+                Paragraph(sig1, S["sign_label"]),
+                Paragraph(sig2, S["sign_label"]),
+                Paragraph(sig3, S["sign_label"]),
             ]
         ], colWidths=[page_w / 3] * 3, style=[
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("TOPPADDING", (0, 0), (-1, -1), 2),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-            ("FONTNAME", (0, 0), (-1, -1), _get_font()),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ]),
     ]))
 
@@ -695,7 +779,7 @@ def generate_daily_report_pdf(
     buffer.close()
 
     logger.info(
-        "government_executive_pdf_generated",
+        "government_executive_pdf_v2_generated",
         date=report_date,
         doc_id=doc_id,
         submissions_count=len(submissions),
