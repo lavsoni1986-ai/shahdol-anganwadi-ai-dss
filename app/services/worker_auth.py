@@ -13,6 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
+from app.config import settings
 from app.schemas import WorkerAuthResult
 from app.utils.logger import get_logger
 
@@ -120,7 +121,6 @@ def authenticate_worker(phone_number: str) -> WorkerAuthResult:
     ceo_phone = os.getenv("DEMO_CEO_PHONE", "")
     if not ceo_phone:
         try:
-            from app.config import settings
             ceo_phone = getattr(settings, "demo_ceo_phone", "") or ""
         except Exception:
             pass

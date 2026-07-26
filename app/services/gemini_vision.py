@@ -35,6 +35,7 @@ from google.genai.errors import APIError, ClientError
 from PIL import Image
 from pydantic import BaseModel, ValidationError
 
+from app.config import settings
 from app.utils.logger import get_logger
 
 # Explicitly load .env environment variables at module load time
@@ -67,7 +68,6 @@ class GeminiVisionService:
 
         if not self.api_key or not self.groq_api_key:
             try:
-                from app.config import settings
                 if not self.api_key:
                     self.api_key = getattr(settings, "gemini_api_key", None) or os.getenv("GEMINI_API_KEY")
                 if not self.groq_api_key:
@@ -108,7 +108,6 @@ class GeminiVisionService:
         groq_key = self.groq_api_key or os.getenv("GROQ_API_KEY")
         if not groq_key:
             try:
-                from app.config import settings
                 groq_key = getattr(settings, "groq_api_key", None)
             except Exception:
                 pass
@@ -296,7 +295,6 @@ class GeminiVisionService:
             self.api_key = os.getenv("GEMINI_API_KEY")
             if not self.api_key:
                 try:
-                    from app.config import settings
                     self.api_key = getattr(settings, "gemini_api_key", None)
                 except Exception:
                     pass

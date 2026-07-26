@@ -19,6 +19,7 @@ from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import async_session_maker
 from app.models import DailySubmission, SubmissionStatus
 from app.services.gemini_vision import vision_service
@@ -439,7 +440,6 @@ async def process_image_ai_pipeline(submission_id: str):
                     from pathlib import Path
                     from app.services.whatsapp import send_whatsapp_text_message, send_whatsapp_document
                     from app.services.pdf_generator import generate_daily_report_pdf
-                    from app.config import settings
 
                     remarks_text = vision_res.get("remarks") or "आंगनवाड़ी उपस्थिति सत्यापन प्रक्रिया पूर्ण।"
                     provider_label = vision_res.get("provider", "Groq AI")
