@@ -205,6 +205,22 @@ async def check_duplicate_hash(
     return False, computed_hash
 
 
+def calculate_haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculates distance in meters between two GPS coordinates using Haversine formula."""
+    try:
+        R = 6371000.0  # Earth radius in meters
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        delta_phi = math.radians(lat2 - lat1)
+        delta_lambda = math.radians(lon2 - lon1)
+
+        a = math.sin(delta_phi / 2.0)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0)**2
+        c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+        return round(R * c, 1)
+    except Exception:
+        return 0.0
+
+
 def estimate_child_count_and_meal(pil_img: Image.Image) -> tuple[int, bool, float]:
     """
     Fallback simulated ML object detection when external API is offline or rate-limited.
@@ -222,9 +238,9 @@ async def process_image_ai_pipeline(submission_id: str):
     - Media Download & local storage verification
     - PIL Verification & SHA256 computation
     - Blur & Brightness detection (OpenCV)
-    - EXIF metadata extraction
+    - EXIF metadata extraction & GPS Geofencing validation
     - pHash Duplicate detection (ImageHash)
-    - Real Gemini Vision AI Analysis (`vision_service.verify_anganwadi_photo`)
+    - Real Gemini / Groq Vision AI Analysis with EXIF Cross-Validation
     - Resilient OpenCV Fallback on network timeout or API unavailability
     """
     logger.info("ai_pipeline_started", submission_id=submission_id)
@@ -270,7 +286,7 @@ async def process_image_ai_pipeline(submission_id: str):
             # 3. Load Image
             pil_img = _download_or_mock_image(submission.raw_media_id, submission.local_media_path)
 
-            # 4. EXIF Extraction
+            # 4. EXIF Extraction & GPS Geofencing Check
             exif_meta = extract_exif_metadata(pil_img)
             if exif_meta.get("camera_make"):
                 submission.camera_make = exif_meta["camera_make"]
@@ -284,6 +300,20 @@ async def process_image_ai_pipeline(submission_id: str):
             if not submission.longitude and exif_meta.get("gps_longitude"):
                 submission.longitude = str(exif_meta["gps_longitude"])
 
+            center_lat = getattr(settings, "demo_latitude", 23.2845)
+            center_lon = getattr(settings, "demo_longitude", 81.3532)
+            gps_distance_m = None
+            is_outside_geofence = False
+            if submission.latitude and submission.longitude:
+                try:
+                    sub_lat = float(submission.latitude)
+                    sub_lon = float(submission.longitude)
+                    gps_distance_m = calculate_haversine_distance(sub_lat, sub_lon, center_lat, center_lon)
+                    if gps_distance_m > 500.0:  # 500 meters geofence threshold
+                        is_outside_geofence = True
+                except Exception as g_err:
+                    logger.warning("geofence_distance_calc_failed", error=str(g_err))
+
             # 5. Brightness Detection
             brightness_cat, brightness_val = check_image_brightness(pil_img)
             submission.brightness_score = brightness_cat
@@ -296,7 +326,7 @@ async def process_image_ai_pipeline(submission_id: str):
             is_duplicate, computed_hash = await check_duplicate_hash(db, pil_img, awc_id, submission_id)
             submission.image_hash = computed_hash
 
-            # 8. Real Gemini Vision AI Analysis
+            # 8. Real Gemini / Groq Vision AI Analysis with EXIF Cross-Validation
             image_bytes = None
             if submission.local_media_path and pathlib.Path(submission.local_media_path).exists():
                 try:
@@ -311,7 +341,7 @@ async def process_image_ai_pipeline(submission_id: str):
 
             try:
                 logger.info("triggering_gemini_vision_verification", submission_id=submission_id)
-                vision_res = vision_service.verify_anganwadi_photo(image_bytes)
+                vision_res = vision_service.verify_anganwadi_photo(image_bytes, exif_info=exif_meta)
                 logger.info("gemini_vision_response", submission_id=submission_id, status=vision_res.get("status"))
             except Exception as v_err:
                 logger.warning("gemini_vision_service_exception_caught", submission_id=submission_id, error=str(v_err))
@@ -367,12 +397,16 @@ async def process_image_ai_pipeline(submission_id: str):
                 flag_reasons.append("VERY_DARK_IMAGE")
             if is_duplicate:
                 flag_reasons.append("DUPLICATE_IMAGE")
+            if is_outside_geofence:
+                flag_reasons.append("LOCATION_OUTSIDE_GEOFENCE")
 
             if gemini_success:
                 if meal_detected is False:
                     flag_reasons.append("NO_MEAL_DETECTED")
                 if is_valid_scene is False:
                     flag_reasons.append("INVALID_SCENE")
+                if vision_res.get("evidence_consistency") in ("INCONSISTENT", "SUSPICIOUS"):
+                    flag_reasons.append("EXIF_SCENE_INCONSISTENT")
                 if vision_res.get("suspicious_flag"):
                     if "BLURRY" in vision_res.get("image_quality", "") and "BLUR_IMAGE" not in flag_reasons:
                         flag_reasons.append("BLUR_IMAGE")

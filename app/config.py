@@ -83,6 +83,8 @@ class Settings(BaseSettings):
     pilot_center_name: str = Field(default="सोहागपुर नगर")
     pilot_block_name: str = Field(default="सोहागपुर")
     pilot_district: str = Field(default="Shahdol")
+    demo_latitude: float = Field(default=23.2845, alias="DEMO_LATITUDE", description="Demo Anganwadi Centre Latitude (Sohagpur Shahdol)")
+    demo_longitude: float = Field(default=81.3532, alias="DEMO_LONGITUDE", description="Demo Anganwadi Centre Longitude (Sohagpur Shahdol)")
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY", description="Google Gemini API Key")
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY", description="Groq Cloud Vision API Key")
     demo_ceo_phone: str = Field(default="", alias="DEMO_CEO_PHONE", description="VIP CEO Live Demo Phone Number")

@@ -187,10 +187,11 @@ class GeminiVisionService:
             logger.exception("groq_exception", error=str(err))
             return {"success": False, "reason": f"Groq REST Exception: {str(err)}"}
 
-    def verify_anganwadi_photo(self, image_bytes: bytes, max_retries: int = 2) -> dict:
+    def verify_anganwadi_photo(self, image_bytes: bytes, exif_info: Optional[dict] = None, max_retries: int = 2) -> dict:
         """
         Processes Anganwadi site photo and returns strictly validated verification results.
         Tries Groq Cloud Vision REST API first (if GROQ_API_KEY configured), then Gemini Vision.
+        Incorporates EXIF metadata (Device Time, GPS, Camera) for AI cross-validation.
         """
         # Validate image integrity and corrupt files
         try:
@@ -206,13 +207,31 @@ class GeminiVisionService:
                 "fallback": "Manual Review Required"
             }
 
-        strict_prompt = """
+        exif_prompt_block = ""
+        if exif_info and isinstance(exif_info, dict):
+            device_ts = exif_info.get("device_timestamp") or "Unavailable"
+            camera = f"{exif_info.get('camera_make', '')} {exif_info.get('camera_model', '')}".strip() or "Unavailable"
+            lat = exif_info.get("gps_latitude")
+            lon = exif_info.get("gps_longitude")
+            gps_str = f"Lat {lat}, Lon {lon}" if (lat and lon) else "Unavailable (No EXIF GPS)"
+
+            exif_prompt_block = f"""
+            SUBMITTED IMAGE EXIF METADATA FOR EVIDENCE CROSS-CHECK:
+            - Extracted Device Timestamp: {device_ts}
+            - Camera / Device Model: {camera}
+            - EXIF GPS Coordinates: {gps_str}
+            """
+
+        strict_prompt = f"""
         You are an official AI Audit Assistant for District Shahdol Anganwadi Digital Decision Support System (DSS).
         Analyze this photograph carefully and evaluate the scene directly observable.
+        {exif_prompt_block}
 
         CRITICAL AUDIT RULES:
         1. Report ONLY directly observable facts. DO NOT guess, estimate, or infer facts not clearly visible.
-        2. 'remarks' MUST BE WRITTEN EXCLUSIVELY IN PURE DEVANAGARI HINDI SCRIPT (शुद्ध देवनागरी हिंदी).
+        2. Evaluate whether visual lighting (daylight vs night) matches the reported timestamp.
+        3. Check for any timestamp/scene mismatch, screen re-capture, or photo tampering indications.
+        4. 'remarks' MUST BE WRITTEN EXCLUSIVELY IN PURE DEVANAGARI HINDI SCRIPT (शुद्ध देवनागरी हिंदी).
            - DO NOT use Roman Hindi / Hinglish (e.g. NEVER write "Is pratima mein...", "Yeh photo...").
            - Use official administrative tone suitable for District Collector, Zila Panchayat CEO, and CDPO Supervisors.
 
@@ -225,9 +244,10 @@ class GeminiVisionService:
           Write: "आंगनवाड़ी केंद्र का परिसर दिखाई दे रहा है, परंतु बच्चों की उपस्थिति या भोजन वितरण का दृश्य स्पष्ट नहीं है।"
 
         - For 'visible_children_count', return an exact integer ONLY if clearly countable. Otherwise return null.
+        - For 'confidence_score', return an integer percentage between 50 and 99.
 
         Return strictly valid JSON matching this schema:
-        {
+        {{
           "schema_version": "1.0",
           "is_valid_anganwadi_scene": true/false/null,
           "children_visible": true/false/null,
@@ -236,8 +256,10 @@ class GeminiVisionService:
           "meal_visible": true/false/null,
           "environment_type": "indoor" / "outdoor" / "unknown",
           "image_quality": "CLEAR" / "BLURRY" / "DARK" / "POOR",
+          "evidence_consistency": "CONSISTENT" / "SUSPICIOUS" / "INCONSISTENT",
+          "confidence_score": 95,
           "remarks": "केवल शुद्ध देवनागरी हिंदी में शासकीय एवं आधिकारिक विवरण"
-        }
+        }}
         """
 
         # ── 1. TRY GROQ VISION REST PROVIDER FIRST (FASTEST) ──────────────

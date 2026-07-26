@@ -114,7 +114,7 @@ def _get_font(bold: bool = False) -> str:
 
 
 def _shape_hi(text: str, font_name: str = "NotoDevanagari", font_size: float = 10.0) -> str:
-    """Returns clean Unicode text string for ReportLab TTFont rendering."""
+    """Returns raw text string; Devanagari shaping is handled natively by ReportLab ParagraphStyle(..., shaping=True)."""
     if not text:
         return ""
     return str(text)
@@ -150,17 +150,21 @@ class NumberedCanvas(canvas.Canvas):
         fn = _get_font(bold=False)
         fn_bold = _get_font(bold=True)
 
+        st_hdr_left = ParagraphStyle("hdr_l", fontName=fn, fontSize=8, textColor=TEXT_MUTED, shaping=True)
+        st_hdr_right = ParagraphStyle("hdr_r", fontName=fn_bold, fontSize=8, textColor=TEXT_MUTED, alignment=TA_RIGHT, shaping=True)
+        st_ftr_left = ParagraphStyle("ftr_l", fontName=fn, fontSize=8, textColor=TEXT_MUTED, shaping=True)
+        st_ftr_right = ParagraphStyle("ftr_r", fontName=fn_bold, fontSize=8, textColor=TEXT_MUTED, alignment=TA_RIGHT, shaping=True)
+
         # Top Header (Only on pages 2+)
         if self._pageNumber > 1:
-            self.setFont(fn, 8)
-            self.setFillColor(TEXT_MUTED)
-            header_str = _shape_hi("महिला एवं बाल विकास विभाग, मध्य प्रदेश शासन  |  शहडोल आंगनवाड़ी डिजिटल सत्यापन (DSS)", font_name=fn, font_size=8)
-            self.drawString(1.5 * cm, A4[1] - 1.0 * cm, header_str)
-            
-            self.setFont(fn_bold, 8)
-            right_header = _shape_hi("आधिकारिक शासकीय प्रतिवेदन", font_name=fn_bold, font_size=8)
-            self.drawRightString(A4[0] - 1.5 * cm, A4[1] - 1.0 * cm, right_header)
-            
+            p_hdr_l = Paragraph("महिला एवं बाल विकास विभाग, मध्य प्रदेश शासन  |  शहडोल आंगनवाड़ी डिजिटल सत्यापन (DSS)", st_hdr_left)
+            p_hdr_l.wrapOn(self, A4[0] - 8 * cm, 1 * cm)
+            p_hdr_l.drawOn(self, 1.5 * cm, A4[1] - 1.0 * cm)
+
+            p_hdr_r = Paragraph("आधिकारिक शासकीय प्रतिवेदन", st_hdr_right)
+            p_hdr_r.wrapOn(self, 6 * cm, 1 * cm)
+            p_hdr_r.drawOn(self, A4[0] - 7.5 * cm, A4[1] - 1.0 * cm)
+
             self.setStrokeColor(BORDER_GREY)
             self.setLineWidth(0.5)
             self.line(1.5 * cm, A4[1] - 1.15 * cm, A4[0] - 1.5 * cm, A4[1] - 1.15 * cm)
@@ -170,15 +174,14 @@ class NumberedCanvas(canvas.Canvas):
         self.setLineWidth(0.5)
         self.line(1.5 * cm, 1.4 * cm, A4[0] - 1.5 * cm, 1.4 * cm)
 
-        self.setFont(fn, 8)
-        self.setFillColor(TEXT_MUTED)
-        left_footer = _shape_hi("यह प्रतिवेदन BharatOS AI द्वारा स्वतः तैयार किया गया है।  |  महिला एवं बाल विकास विभाग, शहडोल (म.प्र.)  |  गोपनीय (Confidential)", font_name=fn, font_size=8)
-        self.drawString(1.5 * cm, 0.9 * cm, left_footer)
+        p_ftr_l = Paragraph("यह प्रतिवेदन BharatOS AI द्वारा स्वतः तैयार किया गया है।  |  महिला एवं बाल विकास विभाग, शहडोल (म.प्र.)  |  गोपनीय (Confidential)", st_ftr_left)
+        p_ftr_l.wrapOn(self, A4[0] - 6 * cm, 1 * cm)
+        p_ftr_l.drawOn(self, 1.5 * cm, 0.7 * cm)
 
-        page_str = f"पृष्ठ {self._pageNumber} / {page_count}"
-        page_shaped = _shape_hi(page_str, font_name=fn_bold, font_size=8)
-        self.setFont(fn_bold, 8)
-        self.drawRightString(A4[0] - 1.5 * cm, 0.9 * cm, page_shaped)
+        p_ftr_r = Paragraph(f"पृष्ठ {self._pageNumber} / {page_count}", st_ftr_right)
+        p_ftr_r.wrapOn(self, 4 * cm, 1 * cm)
+        p_ftr_r.drawOn(self, A4[0] - 5.5 * cm, 0.7 * cm)
+
         self.restoreState()
 
 
@@ -195,62 +198,62 @@ def _build_styles() -> dict:
         "dept_sub": ParagraphStyle(
             "dept_sub",
             fontName=fn_bold, fontSize=15, textColor=GOV_BLUE,
-            alignment=TA_LEFT, leading=20, spaceAfter=3,
+            alignment=TA_LEFT, leading=20, spaceAfter=3, shaping=True,
         ),
         "doc_title": ParagraphStyle(
             "doc_title",
             fontName=fn_bold, fontSize=22, textColor=GOV_NAVY,
-            alignment=TA_LEFT, leading=28, spaceAfter=4,
+            alignment=TA_LEFT, leading=28, spaceAfter=4, shaping=True,
         ),
         "report_sub": ParagraphStyle(
             "report_sub",
             fontName=fn, fontSize=11, textColor=TEXT_MUTED,
-            alignment=TA_LEFT, leading=15,
+            alignment=TA_LEFT, leading=15, shaping=True,
         ),
         "section_head": ParagraphStyle(
             "section_head",
             fontName=fn_bold, fontSize=15, textColor=GOV_BLUE,
-            spaceBefore=10, spaceAfter=6, leading=19,
+            spaceBefore=10, spaceAfter=6, leading=19, shaping=True,
         ),
         "cell_normal": ParagraphStyle(
             "cell_normal",
             fontName=fn, fontSize=10, textColor=TEXT_DARK,
-            leading=14.5,
+            leading=14.5, shaping=True,
         ),
         "cell_bold": ParagraphStyle(
             "cell_bold",
             fontName=fn_bold, fontSize=10, textColor=TEXT_DARK,
-            leading=14.5,
+            leading=14.5, shaping=True,
         ),
         "cell_center": ParagraphStyle(
             "cell_center",
             fontName=fn, fontSize=10, textColor=TEXT_DARK,
-            alignment=TA_CENTER, leading=14.5,
+            alignment=TA_CENTER, leading=14.5, shaping=True,
         ),
         "cell_header": ParagraphStyle(
             "cell_header",
             fontName=fn_bold, fontSize=11, textColor=WHITE,
-            alignment=TA_CENTER, leading=15,
+            alignment=TA_CENTER, leading=15, shaping=True,
         ),
         "kpi_value": ParagraphStyle(
             "kpi_value",
             fontName=fn_bold, fontSize=18, textColor=GOV_NAVY,
-            alignment=TA_CENTER, leading=22,
+            alignment=TA_CENTER, leading=22, shaping=True,
         ),
         "kpi_label": ParagraphStyle(
             "kpi_label",
             fontName=fn_bold, fontSize=9, textColor=TEXT_MUTED,
-            alignment=TA_CENTER, leading=12,
+            alignment=TA_CENTER, leading=12, shaping=True,
         ),
         "rec_item": ParagraphStyle(
             "rec_item",
             fontName=fn, fontSize=10, textColor=TEXT_DARK,
-            leading=14.5, spaceAfter=3,
+            leading=14.5, spaceAfter=3, shaping=True,
         ),
         "sign_label": ParagraphStyle(
             "sign_label",
             fontName=fn, fontSize=9.5, textColor=TEXT_DARK,
-            alignment=TA_CENTER, leading=14,
+            alignment=TA_CENTER, leading=14, shaping=True,
         ),
     }
 
