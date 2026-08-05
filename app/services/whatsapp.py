@@ -13,6 +13,7 @@ from typing import Optional
 from zoneinfo import ZoneInfo  # Python 3.9+ stdlib
 
 import httpx
+import os
 
 from app.config import settings
 from app.schemas import WorkerAuthResult
@@ -24,7 +25,10 @@ logger = get_logger(__name__)
 IST = ZoneInfo("Asia/Kolkata")
 
 # HTTP timeout for WhatsApp API calls
-_API_TIMEOUT_SECONDS = 10.0
+_API_TIMEOUT_SECONDS = 30.0   # Increased for document delivery reliability
+_DOC_TIMEOUT_SECONDS = 45.0   # Separate, higher timeout for document sends
+_MAX_RETRIES         = 5      # Increased to 5 for better resilience against Meta 131053 errors
+_RETRY_BACKOFF_BASE  = 2.0    # Exponential backoff: 1s, 2s, 4s, 8s, 16s
 
 
 # ─────────────────────────────────────────────
@@ -510,38 +514,163 @@ async def download_and_save_whatsapp_media(
 # Virtual Broadcast & Document Sending
 # ─────────────────────────────────────────────
 
+import asyncio as _asyncio
+
+
+async def _verify_url_accessible(url: str) -> dict:
+    """
+    Verifies that a public URL returns HTTP 200.
+    Called before Meta API to catch unreachable URLs early.
+    If the server cannot reach its own public URL due to network constraints (Hairpin NAT),
+    we log a warning but DO NOT block the delivery (we let Meta try).
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            # Using GET stream instead of HEAD to avoid 405 Method Not Allowed on some StaticFiles routers
+            async with client.stream("GET", url) as resp:
+                content_type = resp.headers.get("content-type", "")
+                ok = (200 <= resp.status_code < 300)
+                logger.info(
+                    "pdf_url_verified",
+                    url=url,
+                    status_code=resp.status_code,
+                    content_type=content_type,
+                    accessible=ok,
+                )
+                # Only block if we successfully connected but got a definite 4xx/5xx error
+                if not ok:
+                    return {"ok": False, "reason": f"HTTP {resp.status_code} from URL"}
+                
+                # Looser content-type check to support application/octet-stream;charset=UTF-8 etc.
+                ct_lower = content_type.lower()
+                if "pdf" not in ct_lower and "octet-stream" not in ct_lower:
+                    logger.warning(
+                        "pdf_url_content_type_unexpected",
+                        url=url,
+                        content_type=content_type,
+                    )
+                return {"ok": True, "status_code": resp.status_code, "content_type": content_type}
+    except Exception as e:
+        # DO NOT block delivery. The backend server might just lack outbound internet or 
+        # loopback resolution for its own domain, but Meta's servers might still reach it.
+        logger.warning(
+            "pdf_url_verification_failed_but_proceeding", 
+            url=url, 
+            error_type=type(e).__name__,
+            error=repr(e)
+        )
+        return {"ok": True, "warning": "local_network_unreachable", "reason": repr(e)}
+
+
 async def send_whatsapp_document(
     to_phone: str,
     document_url: str,
     filename: str,
     caption: Optional[str] = None,
+    local_file_path: Optional[str] = None,
 ) -> dict:
     """
-    Sends a PDF document to a WhatsApp phone number using Meta Cloud API.
+    Sends a document via WhatsApp Cloud API.
+    If local_file_path is provided, it uploads the file directly to Meta's /media API 
+    and sends via media_id, completely bypassing Reverse Proxy/Timeout issues!
 
-    Args:
-        to_phone: Recipient phone number with country code
-        document_url: Publicly accessible URL or Media ID of document
-        filename: File name to display in WhatsApp (e.g. "AWC_Daily_Report.pdf")
-        caption: Optional text caption
+    Reliability improvements (v2):
+    - Pre-verifies URL is accessible (HTTP 200) before calling Meta
+    - Full Meta request + response JSON logged at every attempt
+    - 3 retries with exponential backoff (2s → 4s → 8s)
+    - Separate 45s timeout for document delivery
+    - Captures & logs complete Meta error payloads
+    - Never silently swallows exceptions
 
     Returns:
-        dict with success status and message_id / error
+        dict: {success, message_id, error, meta_response, attempts}
     """
     if not settings.is_whatsapp_configured:
         logger.warning("whatsapp_not_configured_document_send", to_phone=to_phone)
-        return {"success": False, "message_id": None, "error": "WhatsApp credentials not configured"}
+        return {
+            "success": False,
+            "message_id": None,
+            "error": "WhatsApp credentials not configured",
+            "meta_response": None,
+            "attempts": 0,
+        }
+
+    # ── Step 0: Direct Media Upload (Bypasses Link Download Timeouts) ──
+    media_id = None
+    if local_file_path and os.path.exists(local_file_path):
+        media_api_url = f"{settings.whatsapp_api_base_url}/{settings.whatsapp_api_version}/{settings.whatsapp_phone_number_id}/media"
+        logger.info("uploading_media_directly_to_meta", path=local_file_path)
+        try:
+            async with httpx.AsyncClient(timeout=_DOC_TIMEOUT_SECONDS) as client:
+                with open(local_file_path, "rb") as f:
+                    upload_res = await client.post(
+                        media_api_url,
+                        data={"messaging_product": "whatsapp"},
+                        files={"file": (filename, f, "application/pdf")},
+                        headers={"Authorization": f"Bearer {settings.whatsapp_access_token}"},
+                    )
+                    if upload_res.status_code == 200:
+                        media_id = upload_res.json().get("id")
+                        logger.info("meta_media_upload_success", media_id=media_id)
+                    else:
+                        logger.error("meta_media_upload_failed", status=upload_res.status_code, response=upload_res.text)
+        except Exception as e:
+            logger.error("meta_media_upload_exception", error=str(e))
+
+    # ── Step 1: Reject Local/Private URLs (Only if using link) ──────
+    if not media_id:
+        blocked_prefixes = ("http://localhost", "http://127.0", "http://192.168", "http://10.", "http://172.16")
+        if any(document_url.startswith(prefix) for prefix in blocked_prefixes):
+            logger.error(
+                "document_send_aborted_private_url",
+                to_phone=to_phone,
+                url=document_url,
+            )
+            return {
+                "success": False,
+                "message_id": None,
+                "error": "Meta Cloud API requires a public HTTPS URL. Localhost/Private IP rejected.",
+                "meta_response": None,
+                "attempts": 0,
+            }
+
+        # ── Step 2: Verify URL is accessible ────────────────────────────
+        logger.info(
+            "document_send_started",
+            to_phone=to_phone,
+            document_url=document_url,
+            filename=filename,
+        )
+
+        url_check = await _verify_url_accessible(document_url)
+        if not url_check.get("ok"):
+            logger.error(
+                "document_send_aborted_url_inaccessible",
+                to_phone=to_phone,
+                url=document_url,
+                reason=url_check.get("reason"),
+            )
+            return {
+                "success": False,
+                "message_id": None,
+                "error": f"PDF URL not accessible: {url_check.get('reason')}",
+                "meta_response": None,
+                "attempts": 0,
+            }
+
+    # ── Step 3: Build Meta API payload ──────────────────────────────
+    document_payload = {"filename": filename, "caption": (caption or "")[:1024]}
+    if media_id:
+        document_payload["id"] = media_id
+    else:
+        document_payload["link"] = document_url
 
     payload = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
         "to": to_phone,
         "type": "document",
-        "document": {
-            "link": document_url,
-            "filename": filename,
-            "caption": caption or "",
-        },
+        "document": document_payload,
     }
 
     headers = {
@@ -549,24 +678,149 @@ async def send_whatsapp_document(
         "Content-Type": "application/json",
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=_API_TIMEOUT_SECONDS) as client:
-            res = await client.post(settings.whatsapp_api_url, json=payload, headers=headers)
+    api_url = settings.whatsapp_api_url
 
-        res_data = res.json()
-        if res.status_code == 200:
-            msgs = res_data.get("messages", [])
-            msg_id = msgs[0].get("id") if msgs else None
-            logger.info("document_sent_success", to_phone=to_phone, msg_id=msg_id)
-            return {"success": True, "message_id": msg_id, "error": None}
-        else:
-            err = res_data.get("error", {}).get("message", "API Error")
-            logger.error("document_send_failed", to_phone=to_phone, status=res.status_code, error=err)
-            return {"success": False, "message_id": None, "error": f"API Error {res.status_code}: {err}"}
+    # ── Step 3: Retry loop with exponential backoff ──────────────────
+    last_error: str = "Unknown error"
+    last_meta_response: Optional[dict] = None
 
-    except Exception as e:
-        logger.error("document_send_exception", to_phone=to_phone, error=str(e))
-        return {"success": False, "message_id": None, "error": str(e)}
+    for attempt in range(1, _MAX_RETRIES + 1):
+        try:
+            logger.info(
+                "meta_document_request_sending",
+                attempt=attempt,
+                max_retries=_MAX_RETRIES,
+                to_phone=to_phone,
+                api_url=api_url,
+                document_url=document_url,
+                filename=filename,
+            )
+
+            async with httpx.AsyncClient(timeout=_DOC_TIMEOUT_SECONDS) as client:
+                res = await client.post(api_url, json=payload, headers=headers)
+
+            # Always parse and log full Meta response
+            try:
+                res_data = res.json()
+            except Exception:
+                res_data = {"raw": res.text[:500]}
+
+            last_meta_response = res_data
+
+            logger.info(
+                "meta_response_received",
+                attempt=attempt,
+                to_phone=to_phone,
+                status_code=res.status_code,
+                meta_response_full=res_data,   # Full JSON — never truncated
+            )
+
+            if 200 <= res.status_code < 300:
+                msgs = res_data.get("messages", [])
+                msg_id = msgs[0].get("id") if msgs else None
+                logger.info(
+                    "document_delivery_success",
+                    to_phone=to_phone,
+                    msg_id=msg_id,
+                    attempt=attempt,
+                    document_url=document_url,
+                    filename=filename,
+                )
+                return {
+                    "success": True,
+                    "message_id": msg_id,
+                    "error": None,
+                    "meta_response": res_data,
+                    "attempts": attempt,
+                }
+
+            # Non-200: extract full Meta error
+            error_block = res_data.get("error", {})
+            error_msg    = error_block.get("message", "Unknown API error")
+            error_code   = error_block.get("code", "N/A")
+            error_fbtid  = error_block.get("fbtrace_id", "N/A")
+            error_subcode= error_block.get("error_subcode", "N/A")
+            last_error   = (
+                f"HTTP {res.status_code} | code={error_code} | subcode={error_subcode} "
+                f"| msg={error_msg} | fbtrace={error_fbtid}"
+            )
+
+            logger.error(
+                "document_delivery_failed",
+                attempt=attempt,
+                to_phone=to_phone,
+                status_code=res.status_code,
+                error_code=error_code,
+                error_subcode=error_subcode,
+                error_message=error_msg,
+                fbtrace_id=error_fbtid,
+                full_meta_error=error_block,
+            )
+
+            # 401/403 = auth failure — do not retry
+            if res.status_code in (401, 403):
+                logger.error(
+                    "document_send_auth_failure_no_retry",
+                    to_phone=to_phone,
+                    status_code=res.status_code,
+                )
+                break
+
+        except httpx.TimeoutException as e:
+            last_error = f"Timeout after {_DOC_TIMEOUT_SECONDS}s on attempt {attempt}"
+            logger.error(
+                "document_send_timeout",
+                attempt=attempt,
+                to_phone=to_phone,
+                timeout_seconds=_DOC_TIMEOUT_SECONDS,
+                error=str(e),
+            )
+
+        except httpx.RequestError as e:
+            last_error = f"Network error on attempt {attempt}: {str(e)}"
+            logger.error(
+                "document_send_network_error",
+                attempt=attempt,
+                to_phone=to_phone,
+                error=str(e),
+            )
+
+        except Exception as e:
+            last_error = f"Unexpected error on attempt {attempt}: {str(e)}"
+            logger.error(
+                "document_send_unexpected_error",
+                attempt=attempt,
+                to_phone=to_phone,
+                error=str(e),
+                exc_info=True,
+            )
+
+        # Exponential backoff before next retry (1s, 2s, 4s, 8s, 16s)
+        if attempt < _MAX_RETRIES:
+            backoff_seconds = _RETRY_BACKOFF_BASE ** (attempt - 1)
+            logger.warning(
+                "retry_attempt",
+                attempt=attempt,
+                next_attempt=attempt + 1,
+                backoff_seconds=backoff_seconds,
+                to_phone=to_phone,
+            )
+            await _asyncio.sleep(backoff_seconds)
+
+    logger.error(
+        "document_delivery_all_retries_exhausted",
+        to_phone=to_phone,
+        total_attempts=_MAX_RETRIES,
+        final_error=last_error,
+        document_url=document_url,
+    )
+    return {
+        "success": False,
+        "message_id": None,
+        "error": last_error,
+        "meta_response": last_meta_response,
+        "attempts": _MAX_RETRIES,
+    }
 
 
 async def virtual_broadcast_document(

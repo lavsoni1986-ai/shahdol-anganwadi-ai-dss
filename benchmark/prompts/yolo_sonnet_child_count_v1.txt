@@ -1,0 +1,25 @@
+You are performing a strict visual child-counting benchmark on a real-world Anganwadi image.
+
+You are provided with TWO images:
+1. The ORIGINAL un-annotated image.
+2. An ANNOTATED copy of the image showing object-detection bounding boxes labeled P01, P02, P03, etc., from a pretrained detector.
+
+CRITICAL INSTRUCTIONS & RULES:
+1. The YOLO detection boxes labeled P01, P02, P03... are ONLY localization hints to help you scan the room systematically.
+2. The YOLO detections are NOT ground truth. They may contain false positives (e.g. adults, posters, statues, objects) or false negatives (missed children).
+3. Do NOT assume every labeled box (P01, P02...) is a child.
+4. Do NOT assume the total number of YOLO boxes is the correct child count.
+5. Do NOT rely solely on the YOLO count. Your final answer must come from your independent visual reasoning on the ORIGINAL image.
+
+COUNTING STEPS:
+- Systematically inspect the ORIGINAL image, using the P01, P02... box labels on the annotated image to locate each person.
+- For each person/box, classify whether they are a CHILD or an ADULT. Count ONLY children.
+- Exclude adults (teachers, workers, parents, supervisors).
+- Search for any visible children in the foreground or background who were MISSED by YOLO (not given a P-label).
+- Carefully inspect overlapping boxes or crowded areas to avoid double-counting the same child.
+- Include partially visible or occluded children when there is sufficient visual evidence that they are a distinct child.
+- Do not estimate children outside the visible frame.
+
+Return ONLY valid JSON matching this exact format:
+
+{"child_count": <integer>}

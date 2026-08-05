@@ -35,8 +35,6 @@ import pathlib
 _TEMPLATES_DIR = pathlib.Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
-# Total registered AWC centres in Shahdol district (official count)
-TOTAL_AWC_CENTRES = 1450
 
 
 # ─────────────────────────────────────────────
@@ -76,6 +74,15 @@ class SubmissionListItem(BaseModel):
     reviewer_name: Optional[str]
     reviewed_at: Optional[datetime]
     ack_sent: bool
+    
+    # New fields for Dashboard UI
+    district: Optional[str] = None
+    sector: Optional[str] = None
+    supervisor_name: Optional[str] = None
+    registered_children: Optional[int] = None
+    school_going_children: Optional[int] = None
+    meal_status: Optional[str] = None
+    visible_children: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -195,14 +202,9 @@ async def get_dashboard_stats(
         DailySubmission.submission_timestamp <= end_utc,
         DailySubmission.is_authorized == True,
     ]
-    
-    # Version 3.0: CEO Demo Mode automatic filter
-    if settings.demo_mode:
-        base_filters.append(DailySubmission.awc_id == settings.demo_awc_id)
-
-    if block_name and not settings.demo_mode:
+    if block_name:
         base_filters.append(DailySubmission.block_name.ilike(f"%{block_name}%"))
-        
+
     today_filter = and_(*base_filters)
 
     # Total authorized submissions today
@@ -236,19 +238,15 @@ async def get_dashboard_stats(
     pending_review: int = pending_result.scalar_one() or 0
 
     # Coverage percentage & Total Centres calculation
-    if settings.demo_mode:
-        total_awc_centres = 1
-        coverage = 100.0 if reported_today > 0 else 0.0
-    else:
-        total_awc_centres = TOTAL_AWC_CENTRES
-        coverage = round((reported_today / TOTAL_AWC_CENTRES) * 100, 1) if reported_today else 0.0
+    from app.models import AnganwadiMaster
+    total_awc_result = await db.execute(select(func.count(AnganwadiMaster.id)))
+    total_awc_centres = total_awc_result.scalar_one() or 0
+    coverage = round((reported_today / total_awc_centres) * 100, 1) if total_awc_centres > 0 else 0.0
 
     now_ist = datetime.now(ist)
 
     logger.info(
         "dashboard_stats_computed",
-        demo_mode=settings.demo_mode,
-        demo_awc_id=settings.demo_awc_id if settings.demo_mode else None,
         reported_today=reported_today,
         approved_today=approved_today,
         flagged_today=flagged_today,
@@ -303,10 +301,6 @@ async def list_submissions(
     # Build the base query
     filters = [DailySubmission.is_authorized == True]
 
-    # Version 3.0: CEO Demo Mode automatic filter
-    if settings.demo_mode:
-        filters.append(DailySubmission.awc_id == settings.demo_awc_id)
-
     # Date filter
     if today_only and not date:
         start_utc, end_utc = _date_utc_range(None)
@@ -352,20 +346,44 @@ async def list_submissions(
     total: int = total_result.scalar_one() or 0
 
     # Paginated data query
+    from app.models import AnganwadiMaster
     offset = (page - 1) * page_size
     data_query = (
-        select(DailySubmission)
+        select(DailySubmission, AnganwadiMaster)
+        .outerjoin(AnganwadiMaster, DailySubmission.awc_id == AnganwadiMaster.awc_code)
         .where(and_(*filters))
         .order_by(DailySubmission.submission_timestamp.desc())
         .offset(offset)
         .limit(page_size)
     )
     result = await db.execute(data_query)
-    submissions = result.scalars().all()
+    rows = result.all()
+
+    def parse_ai_children(ai_sc: str) -> Optional[int]:
+        if not ai_sc: return None
+        if "बच्चे" in ai_sc or "child" in ai_sc.lower():
+            try:
+                parts = ai_sc.split("(")
+                if len(parts) > 1 and "बच्चे" in parts[1]:
+                    num_str = "".join(c for c in parts[1] if c.isdigit())
+                    if num_str:
+                        return int(num_str)
+            except Exception:
+                pass
+        return None
+
+    def parse_meal_status(flag_reason: str, ai_score: str) -> str:
+        if flag_reason and "NO_MEAL" in flag_reason.upper():
+            return "भोजन नहीं"
+        return "भोजन उपस्थित" if ai_score else "N/A"
 
     # Map ORM objects to response schema
-    items = [
-        SubmissionListItem(
+    items = []
+    for s, awc in rows:
+        vis_child = parse_ai_children(s.ai_score)
+        meal_stat = parse_meal_status(s.flag_reason, s.ai_score)
+        
+        items.append(SubmissionListItem(
             id=s.id,
             submission_id=s.submission_id,
             awc_id=s.awc_id,
@@ -386,9 +404,14 @@ async def list_submissions(
             reviewer_name=s.reviewer_name,
             reviewed_at=s.reviewed_at,
             ack_sent=s.ack_sent,
-        )
-        for s in submissions
-    ]
+            district=awc.district if awc else s.district,
+            sector=awc.sector if awc else None,
+            supervisor_name=awc.supervisor_name if awc else None,
+            registered_children=awc.registered_children if awc else 0,
+            school_going_children=awc.school_going_children if awc else 0,
+            meal_status=meal_stat,
+            visible_children=vis_child,
+        ))
 
     total_pages = max(1, -(-total // page_size))  # Ceiling division
 

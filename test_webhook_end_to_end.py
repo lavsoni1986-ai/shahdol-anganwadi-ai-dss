@@ -54,9 +54,10 @@ def test_webhook_post_ingestion():
         ]
     }
 
-    response = client.post("/webhook", json=payload)
-    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-    print("\n[OK] Webhook POST responded with 200 OK:", response.json())
+    with TestClient(app) as client:
+        response = client.post("/webhook", json=payload)
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        print("\n[OK] Webhook POST responded with 200 OK:", response.json())
 
     # Verify DB persistence
     async def verify_db():

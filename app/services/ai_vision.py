@@ -3,11 +3,12 @@
 # BharatOS — Shahdol Anganwadi MVP — Day 4
 # Computer Vision & AI Validation Pipeline
 # Includes: Blur detection, pHash duplicate detection, Brightness scoring,
-#           EXIF extraction, Gemini Vision Analysis & OpenCV Fallback
+#           EXIF extraction, Groq Vision Analysis & OpenCV Fallback
 # =====================================================================
 
 import asyncio
 import io
+import math
 import pathlib
 import random
 from typing import Optional
@@ -22,7 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import async_session_maker
 from app.models import DailySubmission, SubmissionStatus
-from app.services.gemini_vision import vision_service
+from app.services.groq_vision import vision_service
+from app.services.yolo_detector import yolo_detector
 from app.services.whatsapp import download_and_save_whatsapp_media
 from app.utils.logger import get_logger
 
@@ -35,30 +37,18 @@ HASH_HAMMING_DISTANCE_THRESHOLD = 5
 
 def _download_or_mock_image(media_id: Optional[str], local_path: Optional[str] = None) -> Image.Image:
     """
-    Loads PIL image from local_path if exists.
-    If local_path is not available or doesn't exist, generates a synthetic/mock image
-    for testing.
+    Loads PIL image from local_path if it exists.
+    Raises FileNotFoundError if local_path is missing or invalid.
+    Strictly forbids generating synthetic, mock, or random images.
     """
     if local_path and pathlib.Path(local_path).exists():
         try:
             return Image.open(local_path)
         except Exception as e:
-            logger.warning("local_image_load_failed_falling_back_to_mock", path=local_path, error=str(e))
+            logger.error("local_image_load_failed", path=local_path, error=str(e))
+            raise RuntimeError(f"Failed to open valid image at {local_path}: {e}")
 
-    # Create dummy numpy image (640x480)
-    img_array = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
-
-    # If media_id starts with 'blur', artificially blur it
-    if media_id and media_id.startswith("blur"):
-        img_array = cv2.GaussianBlur(img_array, (15, 15), 0)
-
-    # If media_id starts with 'dup', use fixed seed
-    if media_id and media_id.startswith("dup"):
-        np.random.seed(42)
-        img_array = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
-        np.random.seed(None)
-
-    return Image.fromarray(img_array)
+    raise FileNotFoundError(f"Local image file path is missing or invalid: {local_path}")
 
 
 def check_image_blur(pil_img: Image.Image) -> tuple[bool, float]:
@@ -189,7 +179,6 @@ async def check_duplicate_hash(
             DailySubmission.image_hash.is_not(None),
         )
         .order_by(DailySubmission.created_at.desc())
-        .limit(20)
     )
     past_hashes = result.scalars().all()
     current_hash_obj = imagehash.hex_to_hash(computed_hash)
@@ -241,7 +230,7 @@ async def process_image_ai_pipeline(submission_id: str):
     - Blur & Brightness detection (OpenCV)
     - EXIF metadata extraction & GPS Geofencing validation
     - pHash Duplicate detection (ImageHash)
-    - Real Gemini / Groq Vision AI Analysis with EXIF Cross-Validation
+    - Real Groq Vision AI Analysis with EXIF Cross-Validation
     - Resilient OpenCV Fallback on network timeout or API unavailability
     """
     logger.info("ai_pipeline_started", submission_id=submission_id)
@@ -277,12 +266,11 @@ async def process_image_ai_pipeline(submission_id: str):
                         submission.media_sha256 = dl_result.get("sha256")
                 else:
                     err_msg = dl_result.get("error", "Media download failed")
-                    logger.warning("ai_pipeline_media_download_failed", submission_id=submission_id, error=err_msg)
-                    if "exceeds" in err_msg or "Corrupted" in err_msg or "MIME" in err_msg:
-                        submission.status = SubmissionStatus.REJECTED
-                        submission.rejection_reason = err_msg
-                        await db.commit()
-                        return
+                    logger.error("ai_pipeline_media_download_failed", submission_id=submission_id, error=err_msg)
+                    submission.status = SubmissionStatus.FLAGGED
+                    submission.flag_reason = "MEDIA_DOWNLOAD_FAILED"
+                    await db.commit()
+                    return
 
             # 3. Load Image
             pil_img = _download_or_mock_image(submission.raw_media_id, submission.local_media_path)
@@ -327,7 +315,7 @@ async def process_image_ai_pipeline(submission_id: str):
             is_duplicate, computed_hash = await check_duplicate_hash(db, pil_img, awc_id, submission_id)
             submission.image_hash = computed_hash
 
-            # 8. Real Gemini / Groq Vision AI Analysis with EXIF Cross-Validation
+            # 8. Real Groq Vision AI Analysis with EXIF Cross-Validation
             image_bytes = None
             if submission.local_media_path and pathlib.Path(submission.local_media_path).exists():
                 try:
@@ -340,12 +328,34 @@ async def process_image_ai_pipeline(submission_id: str):
                 pil_img.save(buf, format="JPEG")
                 image_bytes = buf.getvalue()
 
+            # --- YOLO11s Local Inference ---
+            yolo_results = None
+            if submission.local_media_path and pathlib.Path(submission.local_media_path).exists():
+                try:
+                    logger.info("triggering_yolo_detection", submission_id=submission_id)
+                    yolo_results = yolo_detector.detect_objects(submission.local_media_path)
+                    if not yolo_results:
+                        logger.warning("yolo_returned_none_falling_back")
+                except Exception as yolo_err:
+                    logger.error("yolo_exception", error=str(yolo_err))
+
             try:
-                logger.info("triggering_gemini_vision_verification", submission_id=submission_id)
-                vision_res = vision_service.verify_anganwadi_photo(image_bytes, exif_info=exif_meta)
-                logger.info("gemini_vision_response", submission_id=submission_id, status=vision_res.get("status"))
+                logger.info("triggering_groq_vision_verification", submission_id=submission_id)
+                # vision_service.verify_anganwadi_photo() calls requests.post() synchronously.
+                # Wrapping in asyncio.to_thread() moves it to a thread-pool worker so the
+                # FastAPI asyncio event loop remains free to serve new webhook requests
+                # (WebhookLog inserts, ack sends) during the 45s+ Groq network call.
+                # Transaction audit: db.commit() at line 267 already ended the write
+                # transaction; no active write lock crosses this await boundary.
+                vision_res = await asyncio.to_thread(
+                    vision_service.verify_anganwadi_photo,
+                    image_bytes,
+                    exif_meta,
+                    yolo_results,
+                )
+                logger.info("groq_vision_response", submission_id=submission_id, status=vision_res.get("status"))
             except Exception as v_err:
-                logger.warning("gemini_vision_service_exception_caught", submission_id=submission_id, error=str(v_err))
+                logger.warning("groq_vision_service_exception_caught", submission_id=submission_id, error=str(v_err))
                 vision_res = {
                     "status": "VISION_UNAVAILABLE",
                     "reason": f"Network Timeout/Error: {str(v_err)}",
@@ -355,15 +365,13 @@ async def process_image_ai_pipeline(submission_id: str):
             child_count = None
             meal_detected = None
             is_valid_scene = None
-            gemini_success = False
+            groq_success = False
 
             if vision_res.get("status") == "SUCCESS":
-                gemini_success = True
+                groq_success = True
                 raw_provider = vision_res.get("provider", "AI_VISION")
                 if "GROQ" in raw_provider:
                     provider_label = "Groq AI"
-                elif "GEMINI" in raw_provider:
-                    provider_label = "Gemini AI"
                 else:
                     provider_label = "Multimodal AI"
 
@@ -372,7 +380,9 @@ async def process_image_ai_pipeline(submission_id: str):
                 is_valid_scene = vision_res.get("is_valid_anganwadi_scene")
                 remarks = vision_res.get("remarks") or ""
 
-                if child_count is not None:
+                if yolo_results:
+                    submission.ai_score = f"{yolo_results.get('confidence', 0)}% YOLO (बच्चे: {yolo_results.get('children_count', 0)}, वर्कर: {yolo_results.get('worker_count', 0)})"
+                elif child_count is not None:
                     submission.ai_score = f"{provider_label}: {child_count} बच्चे दृश्यमान"
                 elif remarks:
                     submission.ai_score = f"{provider_label}: {remarks[:45]}"
@@ -381,7 +391,7 @@ async def process_image_ai_pipeline(submission_id: str):
             else:
                 # Honest fallback without fake/simulated numbers
                 logger.info(
-                    "gemini_vision_fallback_manual_review",
+                    "groq_vision_fallback_manual_review",
                     submission_id=submission_id,
                     status=vision_res.get("status"),
                     reason=vision_res.get("reason"),
@@ -401,7 +411,7 @@ async def process_image_ai_pipeline(submission_id: str):
             if is_outside_geofence:
                 flag_reasons.append("LOCATION_OUTSIDE_GEOFENCE")
 
-            if gemini_success:
+            if groq_success:
                 if meal_detected is False:
                     flag_reasons.append("NO_MEAL_DETECTED")
                 if is_valid_scene is False:
@@ -422,6 +432,14 @@ async def process_image_ai_pipeline(submission_id: str):
                 submission.status = SubmissionStatus.PROCESSED
                 logger.info("ai_pipeline_success", submission_id=submission_id)
 
+            import json
+            final_ai_data = vision_res.copy() if isinstance(vision_res, dict) else {}
+            if yolo_results:
+                final_ai_data["yolo_results"] = yolo_results
+                # If YOLO detected children/worker, use those counts for whatsapp reply
+                child_count = yolo_results.get("children_count", child_count)
+            submission.ai_result_json = json.dumps(final_ai_data, ensure_ascii=False)
+
             await db.commit()
             logger.info(
                 "ai_pipeline_completed",
@@ -429,7 +447,7 @@ async def process_image_ai_pipeline(submission_id: str):
                 status=submission.status,
                 blur_var=round(blur_variance, 2),
                 brightness=brightness_cat,
-                gemini_status=vision_res.get("status"),
+                groq_status=vision_res.get("status"),
                 children=child_count,
             )
 
@@ -439,15 +457,26 @@ async def process_image_ai_pipeline(submission_id: str):
                     from datetime import datetime, timezone, timedelta
                     from pathlib import Path
                     from app.services.whatsapp import send_whatsapp_text_message, send_whatsapp_document
-                    from app.services.pdf_generator import generate_daily_report_pdf
+                    from app.services.pdf_generator import generate_submission_pdf
 
                     remarks_text = vision_res.get("remarks") or "आंगनवाड़ी उपस्थिति सत्यापन प्रक्रिया पूर्ण।"
                     provider_label = vision_res.get("provider", "Groq AI")
+                    if "GROQ" in provider_label.upper():
+                        provider_label = "Groq AI"
+                    if yolo_results:
+                        provider_label = f"YOLO11m + {provider_label}"
                     
                     status_emoji = "✅" if submission.status == SubmissionStatus.PROCESSED else "⚠️"
                     status_heading = "सत्यापित (Verified)" if submission.status == SubmissionStatus.PROCESSED else "समीक्षा हेतु फ्लैग्ड (Flagged)"
 
                     child_info = f"👶 *उपस्थित बच्चे:* {child_count}\n" if child_count is not None else ""
+                    # Format AI scorecard fields
+                    confidence_pct = vision_res.get("confidence_score", "N/A")
+                    yolo_conf = yolo_results.get("confidence", "N/A") if yolo_results else "N/A"
+                    proc_time = round(yolo_results.get("processing_time_ms", 0)/1000, 1) if yolo_results else "N/A"
+                    img_quality = vision_res.get("image_quality", "Unknown")
+                    is_dup = "Yes" if "DUPLICATE" in (getattr(submission, "flag_reason", None) or "").upper() else "No"
+                    gps_status = "Verified" if getattr(submission, "latitude", None) else "Missing"
                     
                     ai_reply = (
                         f"🤖 *BharatOS AI विज़न सत्यापन परिणाम*\n\n"
@@ -456,6 +485,13 @@ async def process_image_ai_pipeline(submission_id: str):
                         f"👤 *प्रेषक:* {submission.worker_name or 'N/A'}\n"
                         f"⚙️ *AI Engine:* {provider_label}\n"
                         f"{child_info}"
+                        f"🎯 *AI Confidence:* {yolo_conf}%\n"
+                        f"⏱️ *Processing Time:* {proc_time} Seconds\n"
+                        f"📷 *Image Quality:* {img_quality}\n"
+                        f"🔄 *Duplicate:* {is_dup}\n"
+                        f"📍 *GPS:* {gps_status}\n"
+                        f"⏰ *Timestamp:* Verified\n"
+                        f"✅ *AI Status:* {status_heading.split()[0]}\n"
                         f"📝 *शासकीय टिप्पणी:* {remarks_text}\n\n"
                         f"📑 *ट्रैकिंग ID:* {submission.audit_id or submission.submission_id[:8]}"
                     )
@@ -468,38 +504,90 @@ async def process_image_ai_pipeline(submission_id: str):
 
                     # Generate PDF report & dispatch document link
                     try:
+                        import os as _os
                         reports_dir = Path(__file__).parent.parent / "static" / "reports"
                         reports_dir.mkdir(parents=True, exist_ok=True)
                         pdf_filename = f"AWC_Report_{submission.audit_id or submission.submission_id[:8]}.pdf"
                         pdf_path = reports_dir / pdf_filename
-                        
-                        ist_now = datetime.now(timezone(timedelta(hours=5, minutes=30)))
-                        pdf_bytes = generate_daily_report_pdf(
-                            report_date=ist_now.strftime("%d/%m/%Y"),
-                            stats={
-                                "reported_today": 1,
-                                "approved_today": 1 if submission.status == SubmissionStatus.PROCESSED else 0,
-                                "flagged_today": 1 if submission.status == SubmissionStatus.FLAGGED else 0,
-                                "pending_review": 0,
-                                "coverage_percent": 100.0
-                            },
-                            submissions=[submission],
-                            block_name=submission.block_name,
-                            status_filter=None
-                        )
-                        pdf_path.write_bytes(pdf_bytes)
 
+                        logger.info(
+                            "pdf_generation_started",
+                            submission_id=submission_id,
+                            pdf_filename=pdf_filename,
+                        )
+
+                        pdf_bytes = generate_submission_pdf(submission)
+
+                        # ── Write PDF to disk with explicit OS flush ──────────────────
+                        with open(pdf_path, "wb") as pdf_file:
+                            pdf_file.write(pdf_bytes)
+                            pdf_file.flush()
+                            _os.fsync(pdf_file.fileno())   # Force OS buffer flush to disk
+
+                        # ── Verify file actually exists and is non-zero ───────────────
+                        if not pdf_path.exists():
+                            raise RuntimeError(f"PDF file not found on disk after write: {pdf_path}")
+
+                        pdf_size_kb = round(pdf_path.stat().st_size / 1024, 1)
+                        if pdf_path.stat().st_size == 0:
+                            raise RuntimeError(f"PDF file is 0 bytes after write: {pdf_path}")
+
+                        logger.info(
+                            "pdf_saved",
+                            submission_id=submission_id,
+                            pdf_path=str(pdf_path),
+                            size_kb=pdf_size_kb,
+                        )
+
+                        # ── Save PDF path to DB record ────────────────────────────────
+                        submission.pdf_path = str(pdf_path)
+                        await db.commit()
+
+                        # ── Build public URL and dispatch ─────────────────────────────
                         if settings.app_public_url:
                             pdf_public_url = f"{settings.app_public_url.rstrip('/')}/static/reports/{pdf_filename}"
-                            await send_whatsapp_document(
+
+                            logger.info(
+                                "pdf_verified",
+                                submission_id=submission_id,
+                                pdf_public_url=pdf_public_url,
+                                size_kb=pdf_size_kb,
+                            )
+
+                            delivery_result = await send_whatsapp_document(
                                 to_phone=submission.worker_phone,
                                 document_url=pdf_public_url,
                                 filename=pdf_filename,
-                                caption=f"📄 शासकीय एआई उपस्थिति सत्यापन रिपोर्ट PDF — {submission.center_name or 'AWC'}"
+                                caption=f"🟢 यहाँ आपकी आंगनवाड़ी डिजिटल सत्यापन निरीक्षण रिपोर्ट है - {submission.center_name or 'AWC'}",
+                                local_file_path=str(pdf_path),
                             )
-                            logger.info("pdf_report_whatsapp_sent", to_phone=submission.worker_phone, pdf_url=pdf_public_url)
+
+                            if delivery_result.get("success"):
+                                logger.info(
+                                    "pdf_report_whatsapp_sent",
+                                    to_phone=submission.worker_phone,
+                                    pdf_url=pdf_public_url,
+                                    msg_id=delivery_result.get("message_id"),
+                                    attempts=delivery_result.get("attempts"),
+                                )
+                            else:
+                                logger.error(
+                                    "pdf_report_whatsapp_delivery_failed",
+                                    to_phone=submission.worker_phone,
+                                    pdf_url=pdf_public_url,
+                                    error=delivery_result.get("error"),
+                                    meta_response=delivery_result.get("meta_response"),
+                                    attempts=delivery_result.get("attempts"),
+                                )
+                        else:
+                            logger.warning(
+                                "pdf_dispatch_skipped_no_public_url",
+                                submission_id=submission_id,
+                                hint="Set APP_PUBLIC_URL in .env to enable PDF delivery",
+                            )
                     except Exception as pdf_err:
-                        logger.error("pdf_report_dispatch_failed", error=str(pdf_err))
+                        logger.error("pdf_report_dispatch_failed", error=str(pdf_err), exc_info=True)
+
 
                 except Exception as wa_err:
                     logger.error("ai_verification_whatsapp_reply_failed", error=str(wa_err))

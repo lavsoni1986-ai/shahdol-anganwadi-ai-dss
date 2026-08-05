@@ -1,0 +1,23 @@
+You are analyzing a cropped image tile (region) from a larger real-world Anganwadi photo.
+
+Your task is to identify and count all distinct visible CHILDREN present within this specific image tile.
+
+RULES:
+1. Count ONLY children. Exclude adults (teachers, workers, parents).
+2. For each distinct visible child in this tile, record their local position description (e.g. "top-left", "center", "bottom-right") and whether they are fully or partially visible inside this tile.
+3. Do NOT estimate children outside the frame of this tile.
+4. Include partially visible children only when there is sufficient visual evidence of a distinct child.
+
+Return ONLY valid JSON matching this exact structure:
+
+{
+  "tile_id": "<TILE_ID>",
+  "children": [
+    {
+      "local_id": "C01",
+      "position": "<short position description>",
+      "partial": <true_or_false>
+    }
+  ],
+  "tile_child_count": <integer>
+}

@@ -37,7 +37,7 @@ SHAHDOL_BLOCKS = [
     "शहडोल", "अनूपपुर", "पुष्पराजगढ़",
 ]
 
-TOTAL_AWC = 1450
+
 
 
 # ─────────────────────────────────────────────
@@ -91,37 +91,34 @@ async def _fetch_submissions(
         DailySubmission.submission_timestamp >= start_utc,
         DailySubmission.submission_timestamp <= end_utc,
     ]
-    # Version 3.0: CEO Demo Mode automatic filter
-    if settings.demo_mode:
-        filters.append(DailySubmission.awc_id == settings.demo_awc_id)
-
-    if block_name and not settings.demo_mode:
+    if block_name:
         filters.append(DailySubmission.block_name.ilike(f"%{block_name}%"))
     if status_filter:
         filters.append(DailySubmission.status == status_filter.upper())
 
+    from app.models import AnganwadiMaster
     result = await db.execute(
-        select(DailySubmission)
+        select(DailySubmission, AnganwadiMaster)
+        .outerjoin(AnganwadiMaster, DailySubmission.awc_id == AnganwadiMaster.awc_code)
         .where(and_(*filters))
         .order_by(DailySubmission.submission_timestamp.asc())
         .limit(500)   # Safety cap — PDF/Excel can't render 10k rows
     )
-    return list(result.scalars().all())
+    return list(result.all())
 
 
-async def _compute_stats(submissions: list, date_str: Optional[str]) -> dict:
+async def _compute_stats(db: AsyncSession, rows: list, date_str: Optional[str]) -> dict:
     """Computes KPI stats from a list of submission ORM objects."""
-    total     = len(submissions)
-    approved  = sum(1 for s in submissions if s.status == SubmissionStatus.APPROVED)
-    flagged   = sum(1 for s in submissions if s.status == SubmissionStatus.FLAGGED)
-    pending   = sum(1 for s in submissions if s.status == SubmissionStatus.RECEIVED)
+    total     = len(rows)
+    approved  = sum(1 for s, awc in rows if s.status == SubmissionStatus.APPROVED)
+    flagged   = sum(1 for s, awc in rows if s.status == SubmissionStatus.FLAGGED)
+    pending   = sum(1 for s, awc in rows if s.status == SubmissionStatus.RECEIVED)
     
-    if settings.demo_mode:
-        total_awc = 1
-        coverage  = 100.0 if total else 0.0
-    else:
-        total_awc = TOTAL_AWC
-        coverage  = round((total / TOTAL_AWC) * 100, 1) if total else 0.0
+    from app.models import AnganwadiMaster
+    from sqlalchemy import func
+    total_awc_result = await db.execute(select(func.count(AnganwadiMaster.id)))
+    total_awc = total_awc_result.scalar_one() or 0
+    coverage  = round((total / total_awc) * 100, 1) if total_awc > 0 else 0.0
 
     return {
         "reported_today":    total,
@@ -195,8 +192,8 @@ async def download_pdf_report(
     )
 
     # Fetch data
-    submissions = await _fetch_submissions(db, report_date, block_name, status)
-    stats       = await _compute_stats(submissions, report_date)
+    rows = await _fetch_submissions(db, report_date, block_name, status)
+    stats       = await _compute_stats(db, rows, report_date)
     display_date = _display_date(report_date)
 
     # Generate PDF
@@ -204,7 +201,7 @@ async def download_pdf_report(
         pdf_bytes = generate_daily_report_pdf(
             report_date=display_date,
             stats=stats,
-            submissions=submissions,
+            submissions=rows,
             block_name=block_name,
             status_filter=status,
         )
@@ -229,7 +226,7 @@ async def download_pdf_report(
             "Content-Disposition": disposition,
             "Content-Length": str(len(pdf_bytes)),
             "X-Report-Date": display_date,
-            "X-Submissions-Count": str(len(submissions)),
+            "X-Submissions-Count": str(len(rows)),
         },
     )
 
@@ -297,58 +294,73 @@ async def download_excel_report(
     # Header row (Hindi)
     writer.writerow([
         "क्र.सं.",
-        "सबमिशन ID",
+        "जिला (District)",
+        "ब्लॉक (Block)",
+        "सेक्टर (Sector)",
+        "पर्यवेक्षक (Supervisor)",
+        "आंगनवाड़ी (AWC Name)",
         "AWC ID",
-        "केंद्र नाम",
-        "ब्लॉक",
-        "जिला",
-        "कार्यकर्ता नाम",
-        "मोबाइल नंबर",
-        "प्रेषण दिनांक",
+        "कार्यकर्ता नाम (Worker Name)",
+        "पंजीकृत बच्चे (Registered Children)",
+        "उपस्थित बच्चे (Visible Children - AI)",
+        "अंतर (Difference)",
+        "भोजन स्थिति (Meal Status)",
+        "GPS अक्षांश (Lat)",
+        "GPS देशांतर (Lon)",
         "प्रेषण समय (IST)",
-        "संदेश प्रकार",
-        "मीडिया उपलब्ध",
-        "GPS अक्षांश",
-        "GPS देशांतर",
-        "स्थिति",
-        "समीक्षा निर्णय",
-        "समीक्षाकर्ता",
-        "फ्लैग कारण",
-        "अधिकारी टिप्पणी",
-        "ACK भेजा",
-        "एआई स्कोर",
+        "सत्यापन स्थिति (Status)",
+        "फ्लैग कारण / टिप्पणी",
     ])
 
-    for idx, s in enumerate(submissions, 1):
+    for idx, (s, awc) in enumerate(submissions, 1):
         # Format IST timestamp
         ts_date = ts_time = ""
         if s.submission_timestamp:
             ist_ts = s.submission_timestamp.astimezone(IST)
             ts_date = ist_ts.strftime("%d/%m/%Y")
             ts_time = ist_ts.strftime("%I:%M:%S %p")
+            
+        def parse_ai_children(ai_sc: str) -> Optional[int]:
+            if not ai_sc: return None
+            if "बच्चे" in ai_sc or "child" in ai_sc.lower():
+                try:
+                    parts = ai_sc.split("(")
+                    if len(parts) > 1 and "बच्चे" in parts[1]:
+                        num_str = "".join(c for c in parts[1] if c.isdigit())
+                        if num_str:
+                            return int(num_str)
+                except Exception:
+                    pass
+            return None
+
+        def parse_meal_status(flag_reason: str, ai_score: str) -> str:
+            if flag_reason and "NO_MEAL" in flag_reason.upper():
+                return "भोजन नहीं"
+            return "भोजन उपस्थित" if ai_score else "N/A"
+
+        registered = awc.registered_children if awc and awc.registered_children else 0
+        visible = parse_ai_children(s.ai_score) or 0
+        diff = (registered - visible) if visible > 0 else 0
+        meal_status = parse_meal_status(s.flag_reason, s.ai_score)
 
         writer.writerow([
             idx,
-            s.submission_id or "",
-            s.awc_id or "",
+            awc.district if awc else s.district,
+            awc.block_name if awc else s.block_name,
+            awc.sector if awc else "",
+            awc.supervisor_name if awc else "",
             s.center_name or "",
-            s.block_name or "",
-            s.district or "Shahdol",
+            s.awc_id or "",
             s.worker_name or "",
-            s.worker_phone or "",
-            ts_date,
-            ts_time,
-            s.message_type or "",
-            "हाँ" if s.raw_media_id else "नहीं",
+            registered,
+            visible,
+            diff,
+            meal_status,
             s.latitude or "",
             s.longitude or "",
-            s.status or "",
-            s.review_action or "",
-            s.reviewer_name or "",
+            f"{ts_date} {ts_time}",
+            s.status or "RECEIVED",
             s.flag_reason or "",
-            s.reviewer_remarks or "",
-            "हाँ" if s.ack_sent else "नहीं",
-            s.ai_score or "",
         ])
 
     csv_str = output.getvalue()
@@ -399,7 +411,7 @@ async def send_whatsapp_pdf_report(
     Generates and dispatches PDF report to a WhatsApp phone number.
     """
     submissions = await _fetch_submissions(db, report_date, None, None)
-    stats       = await _compute_stats(submissions, report_date)
+    stats       = await _compute_stats(db, submissions, report_date)
     display_date = _display_date(report_date)
 
     # Save PDF temporarily to disk in static/reports for public link
@@ -422,7 +434,7 @@ async def send_whatsapp_pdf_report(
         to_phone=to_phone,
         document_url=pdf_url,
         filename=filename,
-        caption=f"📄 *शहडोल जिला — दैनिक आंगनवाड़ी पोषण आहार रिपोर्ट*\n📅 दिनांक: {display_date}\n📊 कुल केंद्र: {TOTAL_AWC} | रिपोर्ट प्राप्त: {len(submissions)}",
+        caption=f"📄 *शहडोल जिला — दैनिक आंगनवाड़ी पोषण आहार रिपोर्ट*\n📅 दिनांक: {display_date}\n📊 कुल केंद्र: {stats['total_awc_centres']} | रिपोर्ट प्राप्त: {len(submissions)}",
     )
 
     return {

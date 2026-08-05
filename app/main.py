@@ -250,6 +250,7 @@ def _parse_webhook_payload(raw_body: dict) -> Optional[ParsedSubmission]:
                 # Extract location if provided
                 lat = message.location.latitude if message.location else None
                 lon = message.location.longitude if message.location else None
+                addr = message.location.address if message.location else None
 
                 return ParsedSubmission(
                     sender_phone=sender_phone,
@@ -262,6 +263,7 @@ def _parse_webhook_payload(raw_body: dict) -> Optional[ParsedSubmission]:
                     caption=caption,
                     latitude=lat,
                     longitude=lon,
+                    address=addr,
                     raw_payload_json=json.dumps(raw_body, ensure_ascii=False),
                 )
 
@@ -523,7 +525,7 @@ async def receive_webhook(
     )
 
     # ── 4. Authenticate worker & Validate MIME ─────
-    auth_result: WorkerAuthResult = authenticate_worker(parsed.sender_phone)
+    auth_result: WorkerAuthResult = await authenticate_worker(parsed.sender_phone, db)
 
     # MIME Validation (Allow only image/jpeg, image/png, image/jpg)
     allowed_mimes = {"image/jpeg", "image/png", "image/jpg"}
@@ -556,6 +558,7 @@ async def receive_webhook(
         caption=parsed.caption,
         latitude=str(parsed.latitude) if parsed.latitude else None,
         longitude=str(parsed.longitude) if parsed.longitude else None,
+        address=parsed.address,
         status=SubmissionStatus.RECEIVED if auth_result.is_authorized else SubmissionStatus.REJECTED,
         is_authorized=auth_result.is_authorized,
         rejection_reason=auth_result.rejection_reason,
@@ -641,21 +644,24 @@ async def receive_webhook(
     response_class=HTMLResponse,
     include_in_schema=False,   # Don't show in Swagger (it's a UI, not an API)
 )
-async def dashboard_panel(request: Request):
+async def dashboard_panel(request: Request, db: AsyncSession = Depends(get_db)):
     """
     Serves the full-featured Admin Dashboard HTML panel.
     Built with Tailwind CSS + Vanilla JS — zero build step required.
     Access at: http://localhost:8000/dashboard
     """
+    from sqlalchemy.future import select
+    from app.models import DistrictSettings
+    result = await db.execute(select(DistrictSettings))
+    ds = result.scalars().first()
+    
     return templates.TemplateResponse(
         "dashboard.html",
         {
             "request": request,
             "app_name": settings.app_name,
-            "pilot_district": settings.pilot_district,
-            "pilot_awc_id": settings.pilot_awc_id,
-            "pilot_center": settings.pilot_center_name,
-            "pilot_block": settings.pilot_block_name,
+            "district": ds.district_name if ds else "Shahdol",
+            "cdpo_name": ds.cdpo_name if ds else "N/A",
             "app_version": settings.app_version,
         },
     )

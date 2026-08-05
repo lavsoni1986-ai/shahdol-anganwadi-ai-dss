@@ -1,0 +1,137 @@
+{
+  "image_id": "CEO-F01",
+  "image_sha256": "91e694d50e4b7cfd324d4b573340d232cbfd9d17ff59db2e207d17b4cbbf1db1",
+  "yolo_model": "yolo11m.pt",
+  "yolo_person_count": 12,
+  "yolo_detections": [
+    {
+      "id": "P01",
+      "confidence": 0.924,
+      "bbox": [
+        831,
+        136,
+        1153,
+        548
+      ]
+    },
+    {
+      "id": "P02",
+      "confidence": 0.888,
+      "bbox": [
+        236,
+        303,
+        479,
+        568
+      ]
+    },
+    {
+      "id": "P03",
+      "confidence": 0.731,
+      "bbox": [
+        743,
+        231,
+        927,
+        378
+      ]
+    },
+    {
+      "id": "P04",
+      "confidence": 0.726,
+      "bbox": [
+        240,
+        279,
+        337,
+        454
+      ]
+    },
+    {
+      "id": "P05",
+      "confidence": 0.679,
+      "bbox": [
+        203,
+        203,
+        291,
+        407
+      ]
+    },
+    {
+      "id": "P06",
+      "confidence": 0.642,
+      "bbox": [
+        760,
+        156,
+        899,
+        312
+      ]
+    },
+    {
+      "id": "P07",
+      "confidence": 0.593,
+      "bbox": [
+        435,
+        0,
+        581,
+        212
+      ]
+    },
+    {
+      "id": "P08",
+      "confidence": 0.587,
+      "bbox": [
+        255,
+        130,
+        415,
+        319
+      ]
+    },
+    {
+      "id": "P09",
+      "confidence": 0.473,
+      "bbox": [
+        732,
+        127,
+        840,
+        256
+      ]
+    },
+    {
+      "id": "P10",
+      "confidence": 0.339,
+      "bbox": [
+        617,
+        100,
+        744,
+        207
+      ]
+    },
+    {
+      "id": "P11",
+      "confidence": 0.336,
+      "bbox": [
+        700,
+        93,
+        795,
+        228
+      ]
+    },
+    {
+      "id": "P12",
+      "confidence": 0.317,
+      "bbox": [
+        850,
+        30,
+        946,
+        159
+      ]
+    }
+  ],
+  "sonnet_model": "anthropic/claude-sonnet-4.5",
+  "prompt_version": "yolo_sonnet_child_count_v1",
+  "prompt_sha256": "845d296bf430704ac0d0e356741494ce868597197e01a26cf7c1e59fd1ebe5d9",
+  "final_child_count": 20,
+  "latency_yolo": 47.5631,
+  "latency_sonnet": 33.5675,
+  "latency_total": 81.1306,
+  "raw_sonnet_response": "Looking at the original image systematically and using the annotated bounding boxes as location guides:\n\n**Adults identified (to exclude):**\n- P01: Adult in pink/salmon colored clothing standing in center\n- P12: Elderly person in blue shirt seated in back right\n- P13: Adult male in white striped shirt seated at bottom right\n\n**Children identified:**\nStarting from left side and moving systematically:\n- P05, P07, P08: Children seated on left side\n- P02, P03, P04: Children in left-center area\n- P09, P10, P11: Children in center area\n- P06: Child in center-right area\n- Multiple children visible in the right portion with overlapping boxes\n\nCarefully examining each detection box and the original image:\n- Left row: 6 children\n- Center/right area: 14 children\n\nCross-checking for missed children and avoiding double-counts in overlapping boxes, I count a total of **20 children** seated and eating their meals.\n\n```json\n{\"child_count\": 20}\n```",
+  "timestamp": "2026-08-05T08:27:28.267712+00:00"
+}

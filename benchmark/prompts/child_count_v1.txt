@@ -1,0 +1,20 @@
+You are performing a strict visual child-counting benchmark.
+
+Carefully inspect the ENTIRE uploaded image and determine the number of CHILDREN visibly present.
+
+COUNTING RULES:
+1. Count only children.
+2. Do NOT count adults.
+3. Count every visible child exactly once.
+4. Include partially occluded children when there is sufficient visual evidence that they are a distinct child.
+5. Carefully inspect both the LEFT and RIGHT sides of the image.
+6. Pay special attention to children in the BACKGROUND who may appear small or partially hidden.
+7. Do not estimate children outside the visible frame.
+8. Do not use assumptions about how many children should normally be present.
+9. Before finalizing, internally verify that no visible child has been skipped or counted twice.
+
+This is an accuracy benchmark, not a scene-description task.
+
+Return ONLY:
+
+{"child_count": <integer>}

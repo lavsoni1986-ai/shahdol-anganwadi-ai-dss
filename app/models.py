@@ -93,32 +93,21 @@ class DailySubmission(Base):
         index=True,
         comment="Sender's WhatsApp phone number with country code (e.g. 919876543210)",
     )
-    worker_name: Mapped[str | None] = mapped_column(
-        String(100),
-        nullable=True,
-        comment="Worker's full name from master data",
-    )
-
-    # --- AWC Centre Details ---
+    worker_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    
+    # --- AWC Details ---
     awc_id: Mapped[str | None] = mapped_column(
-        String(30),
+        String(50), 
         nullable=True,
         index=True,
-        comment="AWC centre identifier (e.g. AWC-SHA-1042)",
+        comment="Unique Anganwadi Centre ID"
     )
-    center_name: Mapped[str | None] = mapped_column(
-        String(100),
-        nullable=True,
-        comment="AWC centre name in Hindi (e.g. रामपुर)",
-    )
-    block_name: Mapped[str | None] = mapped_column(
-        String(100),
-        nullable=True,
-        comment="Block name (e.g. सोहागपुर)",
-    )
+    center_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    block_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     district: Mapped[str | None] = mapped_column(
-        String(50),
+        String(100), 
         nullable=True,
+        default="Shahdol",
         comment="District name",
     )
 
@@ -127,6 +116,7 @@ class DailySubmission(Base):
         DateTime(timezone=True),
         nullable=False,
         default=_utcnow,
+        index=True,
         comment="Timestamp when the WhatsApp message was received (UTC)",
     )
     whatsapp_timestamp: Mapped[str | None] = mapped_column(
@@ -201,6 +191,9 @@ class DailySubmission(Base):
     )
     longitude: Mapped[str | None] = mapped_column(
         String(20), nullable=True, comment="GPS longitude if location shared"
+    )
+    address: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="GPS address if location shared"
     )
 
     # --- Processing Status ---
@@ -285,10 +278,45 @@ class DailySubmission(Base):
         nullable=True,
         comment="AI confidence score/summary text",
     )
-    image_hash: Mapped[str | None] = mapped_column(
-        String(64),
+    
+    # --- Local Processing Details ---
+    local_image_path: Mapped[str | None] = mapped_column(
+        String(255),
         nullable=True,
-        comment="Perceptual hash (pHash) of the submitted image for duplicate detection",
+        comment="Absolute or relative path to the downloaded image file",
+    )
+    local_sha256: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="SHA-256 hash calculated locally after download for evidence integrity",
+    )
+    pdf_path: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Absolute or relative path to the generated verification PDF",
+    )
+    broadcast_status: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        index=True,
+        comment="Status of the WhatsApp broadcast (e.g. SENT, FAILED)",
+    )
+    verification_status: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        index=True,
+        comment="Final determination (e.g. Verified, Needs Manual Review, Metadata Missing)",
+    )
+    ai_result_json: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Full JSON dump of the AI verification response",
+    )
+    image_hash: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        index=True,
+        comment="Perceptual hash computed by AI Vision for duplicate checking",
     )
 
     # --- Record Timestamps ---
@@ -347,3 +375,61 @@ class WebhookLog(Base):
 
     def __repr__(self) -> str:
         return f"<WebhookLog(id={self.id}, received_at={self.received_at!r})>"
+
+
+# ─────────────────────────────────────────────
+# AnganwadiMaster — Real Pilot Master Data
+# ─────────────────────────────────────────────
+class AnganwadiMaster(Base):
+    """
+    Stores the official list of Anganwadi Centres (AWC) and workers.
+    Table: anganwadi_master
+    """
+    __tablename__ = "anganwadi_master"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    district: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    block_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sector: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    supervisor_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    supervisor_mobile: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    awc_code: Mapped[str | None] = mapped_column(String(50), nullable=True, unique=True, index=True)
+    center_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    worker_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    worker_mobile: Mapped[str | None] = mapped_column(String(20), nullable=True, unique=True, index=True)
+    registered_children: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
+    school_going_children: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
+    latitude: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    longitude: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    active_status: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    worker_type: Mapped[str | None] = mapped_column(String(50), nullable=True, default="REGULAR")
+    is_demo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    def __repr__(self) -> str:
+        return f"<AnganwadiMaster(awc_code={self.awc_code!r}, worker_mobile={self.worker_mobile!r})>"
+
+
+# ─────────────────────────────────────────────
+# DistrictSettings — Configuration for Reports
+# ─────────────────────────────────────────────
+class DistrictSettings(Base):
+    """
+    Stores district-level configuration and official contacts.
+    Table: district_settings
+    """
+    __tablename__ = "district_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    district_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    collector_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    collector_mobile: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    ceo_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    ceo_mobile: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    cdpo_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    cdpo_mobile: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    official_whatsapp_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    official_email: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    def __repr__(self) -> str:
+        return f"<DistrictSettings(district_name={self.district_name!r})>"

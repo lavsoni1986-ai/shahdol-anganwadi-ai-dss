@@ -66,6 +66,10 @@ class Settings(BaseSettings):
         default="https://graph.facebook.com",
         description="Meta Graph API base URL",
     )
+    officer_recipient_numbers: str = Field(
+        default="",
+        description="Comma-separated list of officer phone numbers for virtual broadcast",
+    )
 
     # --- Security ---
     secret_key: str = Field(
@@ -73,21 +77,8 @@ class Settings(BaseSettings):
         description="Application secret key — CHANGE IN PRODUCTION",
     )
 
-    # --- Pilot Centre & Single Anganwadi Demo Mode Configuration (Version 3.0) ---
-    demo_mode: bool = Field(default=True, alias="DEMO_MODE", description="Enable Single Anganwadi Demo Mode for CEO Presentation")
-    demo_awc_id: str = Field(default="AWC-SHA-1001", alias="DEMO_AWC_ID", description="Demo Anganwadi Centre ID")
-    demo_center_name: str = Field(default="सोहागपुर नगर", alias="DEMO_CENTER_NAME", description="Demo Anganwadi Centre Name")
-    demo_worker_name: str = Field(default="लव सोनी", alias="DEMO_WORKER_NAME", description="Demo Anganwadi Worker Name")
-    demo_block_name: str = Field(default="सोहागपुर", alias="DEMO_BLOCK_NAME", description="Demo Block Name")
-    pilot_awc_id: str = Field(default="AWC-SHA-1001")
-    pilot_center_name: str = Field(default="सोहागपुर नगर")
-    pilot_block_name: str = Field(default="सोहागपुर")
-    pilot_district: str = Field(default="Shahdol")
-    demo_latitude: float = Field(default=23.2845, alias="DEMO_LATITUDE", description="Demo Anganwadi Centre Latitude (Sohagpur Shahdol)")
-    demo_longitude: float = Field(default=81.3532, alias="DEMO_LONGITUDE", description="Demo Anganwadi Centre Longitude (Sohagpur Shahdol)")
-    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY", description="Google Gemini API Key")
+    # --- AI Keys ---
     groq_api_key: str = Field(default="", alias="GROQ_API_KEY", description="Groq Cloud Vision API Key")
-    demo_ceo_phone: str = Field(default="", alias="DEMO_CEO_PHONE", description="VIP CEO Live Demo Phone Number")
 
     # --- Virtual Broadcast Officer Recipients ---
     officer_recipient_numbers: str = Field(

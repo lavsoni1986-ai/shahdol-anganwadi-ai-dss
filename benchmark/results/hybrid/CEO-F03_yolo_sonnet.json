@@ -1,0 +1,147 @@
+{
+  "image_id": "CEO-F03",
+  "image_sha256": "14f5006e071c7e4a9e6aec39fb6c5a88503fad4b9b74b4008f89cd3656f99ffc",
+  "yolo_model": "yolo11m.pt",
+  "yolo_person_count": 13,
+  "yolo_detections": [
+    {
+      "id": "P01",
+      "confidence": 0.882,
+      "bbox": [
+        888,
+        326,
+        1107,
+        631
+      ]
+    },
+    {
+      "id": "P02",
+      "confidence": 0.866,
+      "bbox": [
+        242,
+        277,
+        442,
+        526
+      ]
+    },
+    {
+      "id": "P03",
+      "confidence": 0.844,
+      "bbox": [
+        798,
+        231,
+        958,
+        456
+      ]
+    },
+    {
+      "id": "P04",
+      "confidence": 0.832,
+      "bbox": [
+        79,
+        434,
+        373,
+        818
+      ]
+    },
+    {
+      "id": "P05",
+      "confidence": 0.82,
+      "bbox": [
+        967,
+        561,
+        1238,
+        860
+      ]
+    },
+    {
+      "id": "P06",
+      "confidence": 0.8,
+      "bbox": [
+        762,
+        207,
+        887,
+        368
+      ]
+    },
+    {
+      "id": "P07",
+      "confidence": 0.776,
+      "bbox": [
+        215,
+        234,
+        337,
+        408
+      ]
+    },
+    {
+      "id": "P08",
+      "confidence": 0.766,
+      "bbox": [
+        698,
+        133,
+        835,
+        298
+      ]
+    },
+    {
+      "id": "P09",
+      "confidence": 0.753,
+      "bbox": [
+        97,
+        345,
+        354,
+        639
+      ]
+    },
+    {
+      "id": "P10",
+      "confidence": 0.73,
+      "bbox": [
+        164,
+        178,
+        282,
+        362
+      ]
+    },
+    {
+      "id": "P11",
+      "confidence": 0.687,
+      "bbox": [
+        695,
+        117,
+        798,
+        246
+      ]
+    },
+    {
+      "id": "P12",
+      "confidence": 0.565,
+      "bbox": [
+        355,
+        97,
+        459,
+        273
+      ]
+    },
+    {
+      "id": "P13",
+      "confidence": 0.565,
+      "bbox": [
+        278,
+        113,
+        416,
+        289
+      ]
+    }
+  ],
+  "sonnet_model": "anthropic/claude-sonnet-4.5",
+  "prompt_version": "yolo_sonnet_child_count_v1",
+  "prompt_sha256": "845d296bf430704ac0d0e356741494ce868597197e01a26cf7c1e59fd1ebe5d9",
+  "final_child_count": null,
+  "latency_yolo": 6.6732,
+  "latency_sonnet": 25.2189,
+  "latency_total": 31.8921,
+  "raw_sonnet_response": "I'll systematically analyze the original image to count children, using the annotated image as a reference for locations.\n\nLet me examine each detected box and the overall scene:\n\n**Left side (bottom to top):**\n- P01: Child in white shirt (foreground left)\n- P04: Child behind P01\n- P08: Child in white/light colored clothing\n- P06: Child in pink/peach top\n- P05: Child (partially visible)\n- P09: Child in light blue\n- P07: Child \n- P10: Child in back area\n\n**Center area:**\n- P12: Child in dark clothing (back center-left)\n- P02: Child in red/orange top (center)\n\n**Right side:**\n- P11: Child in white shirt (center-right)\n- P03: Child next to P11\n- P13: Child \n- P14: Child in darker clothing\n- P15: Child in yellow shirt (right side)\n- P16: Child in bottom right corner\n\n**Adult check:**\n- Far right edge: There appears to be an adult in pink/salmon colored clothing (partially visible) - this should NOT be counted\n\nLet me verify by counting distinct children in the original image:\n1. Bottom left - white shirt\n2. Behind #1 - child\n3. Left side - child with patterned dress\n4. Left-center - child in pink top\n5. Left area - another child\n6. Back left - child in light blue\n7. Back area - child\n8. Back left corner - child\n9. Back center - child in dark top\n10. Center - child in red\n11. Center-right - child in white\n12. Right of center - child\n13. Right area - child\n14. Right area - child in darker clothing\n15. Right side - child in yellow\n16. Bottom right - child\n\nAll detected boxes appear to be children eating meals, with one adult supervisor visible on the right edge.\n\n{\"child_count\": 16}",
+  "timestamp": "2026-08-05T08:28:02.692190+00:00"
+}

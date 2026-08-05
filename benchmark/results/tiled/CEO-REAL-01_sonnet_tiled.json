@@ -1,0 +1,177 @@
+{
+  "image_id": "CEO-REAL-01",
+  "image_sha256": "42777fb560e1aaab42ebb5267a1f2d70c4bee02813191ba65e2f510d98d1a997",
+  "model": "anthropic/claude-sonnet-4.5",
+  "method": "2x3_overlapping_tiles_global_reconciliation",
+  "tile_overlap_percent": 15.0,
+  "tiles": [
+    {
+      "tile_id": "T01",
+      "row": 0,
+      "col": 0,
+      "bbox": [
+        0,
+        0,
+        593,
+        649
+      ],
+      "width": 593,
+      "height": 649
+    },
+    {
+      "tile_id": "T02",
+      "row": 0,
+      "col": 1,
+      "bbox": [
+        504,
+        0,
+        1097,
+        649
+      ],
+      "width": 593,
+      "height": 649
+    },
+    {
+      "tile_id": "T03",
+      "row": 0,
+      "col": 2,
+      "bbox": [
+        1007,
+        0,
+        1600,
+        649
+      ],
+      "width": 593,
+      "height": 649
+    },
+    {
+      "tile_id": "T04",
+      "row": 1,
+      "col": 0,
+      "bbox": [
+        0,
+        551,
+        593,
+        1200
+      ],
+      "width": 593,
+      "height": 649
+    },
+    {
+      "tile_id": "T05",
+      "row": 1,
+      "col": 1,
+      "bbox": [
+        504,
+        551,
+        1097,
+        1200
+      ],
+      "width": 593,
+      "height": 649
+    },
+    {
+      "tile_id": "T06",
+      "row": 1,
+      "col": 2,
+      "bbox": [
+        1007,
+        551,
+        1600,
+        1200
+      ],
+      "width": 593,
+      "height": 649
+    }
+  ],
+  "tile_predictions": [
+    {
+      "tile_id": "T01",
+      "tile_child_count": 7,
+      "bbox": [
+        0,
+        0,
+        593,
+        649
+      ],
+      "latency": 9.9991,
+      "raw_parse_status": "Success (Fenced JSON)"
+    },
+    {
+      "tile_id": "T02",
+      "tile_child_count": 11,
+      "bbox": [
+        504,
+        0,
+        1097,
+        649
+      ],
+      "latency": 8.5609,
+      "raw_parse_status": "Success (Fenced JSON)"
+    },
+    {
+      "tile_id": "T03",
+      "tile_child_count": 5,
+      "bbox": [
+        1007,
+        0,
+        1600,
+        649
+      ],
+      "latency": 8.2943,
+      "raw_parse_status": "Success (Fenced JSON)"
+    },
+    {
+      "tile_id": "T04",
+      "tile_child_count": 3,
+      "bbox": [
+        0,
+        551,
+        593,
+        1200
+      ],
+      "latency": 6.023,
+      "raw_parse_status": "Success (Fenced JSON)"
+    },
+    {
+      "tile_id": "T05",
+      "tile_child_count": 1,
+      "bbox": [
+        504,
+        551,
+        1097,
+        1200
+      ],
+      "latency": 3.969,
+      "raw_parse_status": "Success (Fenced JSON)"
+    },
+    {
+      "tile_id": "T06",
+      "tile_child_count": 3,
+      "bbox": [
+        1007,
+        551,
+        1600,
+        1200
+      ],
+      "latency": 5.2529,
+      "raw_parse_status": "Success (Fenced JSON)"
+    }
+  ],
+  "naive_tile_sum": 30,
+  "final_child_count": 17,
+  "tile_api_latency_seconds": 42.1108,
+  "reconciliation_latency_seconds": 14.5766,
+  "total_latency_seconds": 56.6874,
+  "raw_tile_responses": [
+    "```json\n{\n  \"tile_id\": \"T01\",\n  \"children\": [\n    {\n      \"local_id\": \"C01\",\n      \"position\": \"bottom-left corner\",\n      \"partial\": true\n    },\n    {\n      \"local_id\": \"C02\",\n      \"position\": \"left side, second from bottom\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C03\",\n      \"position\": \"center-left, third from bottom\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C04\",\n      \"position\": \"center-left, fourth from bottom\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C05\",\n      \"position\": \"center, wearing black shirt\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C06\",\n      \"position\": \"center-right, wearing pink\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C07\",\n      \"position\": \"right side\",\n      \"partial\": true\n    }\n  ],\n  \"tile_child_count\": 7\n}\n```",
+    "```json\n{\n  \"tile_id\": \"T02\",\n  \"children\": [\n    {\n      \"local_id\": \"C01\",\n      \"position\": \"far left\",\n      \"partial\": true\n    },\n    {\n      \"local_id\": \"C02\",\n      \"position\": \"left, white shirt\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C03\",\n      \"position\": \"center-left, blue shirt\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C04\",\n      \"position\": \"center-left, pink shirt\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C05\",\n      \"position\": \"center, maroon/red shirt\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C06\",\n      \"position\": \"center-right\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C07\",\n      \"position\": \"center-right, pink shirt\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C08\",\n      \"position\": \"right, striped shirt\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C09\",\n      \"position\": \"right side, brown shirt\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C10\",\n      \"position\": \"bottom right, brown shirt\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C11\",\n      \"position\": \"far right\",\n      \"partial\": true\n    }\n  ],\n  \"tile_child_count\": 11\n}\n```",
+    "```json\n{\n  \"tile_id\": \"T03\",\n  \"children\": [\n    {\n      \"local_id\": \"C01\",\n      \"position\": \"left side, upper area\",\n      \"partial\": true\n    },\n    {\n      \"local_id\": \"C02\",\n      \"position\": \"left side, middle area\",\n      \"partial\": true\n    },\n    {\n      \"local_id\": \"C03\",\n      \"position\": \"left side, center\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C04\",\n      \"position\": \"center-left, lower area, wearing blue cap\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C05\",\n      \"position\": \"bottom-left area\",\n      \"partial\": true\n    }\n  ],\n  \"tile_child_count\": 5\n}\n```",
+    "```json\n{\n  \"tile_id\": \"T04\",\n  \"children\": [\n    {\n      \"local_id\": \"C01\",\n      \"position\": \"top-left\",\n      \"partial\": true\n    },\n    {\n      \"local_id\": \"C02\",\n      \"position\": \"top-center-left\",\n      \"partial\": true\n    },\n    {\n      \"local_id\": \"C03\",\n      \"position\": \"top-center\",\n      \"partial\": true\n    }\n  ],\n  \"tile_child_count\": 3\n}\n```",
+    "```json\n{\n  \"tile_id\": \"T05\",\n  \"children\": [\n    {\n      \"local_id\": \"C01\",\n      \"position\": \"top-right edge\",\n      \"partial\": true\n    }\n  ],\n  \"tile_child_count\": 1\n}\n```",
+    "```json\n{\n  \"tile_id\": \"T06\",\n  \"children\": [\n    {\n      \"local_id\": \"C01\",\n      \"position\": \"center\",\n      \"partial\": false\n    },\n    {\n      \"local_id\": \"C02\",\n      \"position\": \"top-left\",\n      \"partial\": true\n    },\n    {\n      \"local_id\": \"C03\",\n      \"position\": \"upper-left\",\n      \"partial\": true\n    }\n  ],\n  \"tile_child_count\": 3\n}\n```"
+  ],
+  "raw_reconciliation_response": "I'll systematically analyze the original full-resolution image to count each distinct child exactly once, checking overlap regions carefully.\n\n**Analysis by region:**\n\n**Left side (left to right):**\n1. Child in black shirt (far left)\n2. Child in pink/white dress\n3. Child in dark patterned dress\n4. Child in pink dress\n5. Child in light pink top\n\n**Back row (left to right):**\n6. Child in pink shirt\n7. Child in white/cream shirt\n8. Child in dark blue shirt\n9. Child in purple shirt\n10. Child in red/coral shirt\n11. Child in dark shirt\n12. Child (partially visible behind #11)\n13. Child on right end of back row\n\n**Right side (continuing right):**\n14. Child in brown/maroon shirt (right front)\n15. Child in white shirt with blue pants (leaning forward)\n16. Child behind #15\n17. Child in light purple/lavender dress (far right front)\n\n**Overlap region verification:**\n- T01-T02 overlap (x: 504-593): Children in the center back row are counted once\n- T02-T03 overlap (x: 1007-1097): Children on the right side counted once\n- T01-T04 overlap (y: 551-649): Bottom portions of left-side children - no duplicates\n- T02-T05 overlap (y: 551-649): Central bottom area - verified no additional children\n- T03-T06 overlap (y: 551-649): Right bottom area - verified\n\n**Full image scan:** Confirmed no children missed in any gaps or unaccounted areas.\n\n```json\n{\n  \"child_count\": 17\n}\n```",
+  "audit_previous_failed_stage3_response": "HTTP 402: {\"error\":{\"message\":\"Prompt tokens limit exceeded: 12155 > 8120. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account\",\"code\":402,\"metadata\":{\"limit_source\":\"openrouter_credits\",\"remedy_hint\":\"Add credits at https://openrouter.ai/settings/credits, or lower max_tokens / prompt size to fit your remaining balance.\",\"provider_name\":null,\"previous_errors\":[{\"code\":402,\"message\":\"Prompt tokens limit exceeded: 12155 > 8120. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account\"},{\"code\":402,\"message\":\"Prompt tokens limit exceeded: 12155 > 8120. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account\"},{\"code\":402,\"message\":\"Prompt tokens limit exceeded: 12155 > 8120. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account\"},{\"code\":402,\"message\":\"Prompt tokens limit exceeded: 12155 > 8120. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account\"},{\"code\":402,\"message\":\"Prompt tokens limit exceeded: 12155 > 8120. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account\"}]}},\"user_id\":\"user_3HSAK5LpyT8gro5E8N0uce1rc8c\"}",
+  "timestamp": "2026-08-05T09:18:37.230194+00:00"
+}

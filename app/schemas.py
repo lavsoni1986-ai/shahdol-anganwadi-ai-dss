@@ -146,6 +146,7 @@ class ParsedSubmission(BaseModel):
     # Location info
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    address: Optional[str] = None
 
     # Raw payload for audit
     raw_payload_json: Optional[str] = None

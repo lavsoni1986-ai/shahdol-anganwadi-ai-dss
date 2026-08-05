@@ -1,0 +1,5 @@
+Region-Based / Tiled Child Counting Benchmark Prompt Suite v1
+================================================================================
+Stage 2 Tile Enumeration Prompt: sonnet_tile_enumeration_v1.txt
+Stage 3 Global Reconciliation Prompt: sonnet_tiled_reconciliation_v1.txt
+Method: 2x3 Overlapping Grid (15% overlap) + Full Image Global Reconciliation

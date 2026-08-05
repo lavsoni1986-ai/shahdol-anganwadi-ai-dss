@@ -206,9 +206,7 @@
             &nbsp;·&nbsp;
             <span class="font-bold text-white hindi">आंगनवाड़ी डिजिटल सत्यापन प्रतिवेदन</span>
             &nbsp;·&nbsp;
-            <span class="hindi">केंद्र: सोहागपुर नगर (AWC-SHA-1001)</span>
-            &nbsp;·&nbsp;
-            <span class="text-amber-300 text-xs font-semibold hindi">(पायलट प्रदर्शन हेतु)</span>
+            <span class="hindi">जिला: {{ district }}</span>
           </div>
         </div>
       </div>
@@ -234,25 +232,21 @@
   <!-- ═══════════════════════════════════════════════════════════════ -->
   <main class="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
-    <!-- ─── PILOT SINGLE AWC DEMO BANNER WITH MANDATORY NOTICE ─────── -->
+    <!-- ─── DISTRICT PILOT BANNER ─────── -->
     <div class="bg-gradient-to-r from-blue-900 via-indigo-900 to-gov-900 border border-blue-700/50 rounded-2xl p-5 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
       <div class="flex items-center gap-4">
-        <div class="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-2xl shrink-0">📍</div>
+        <div class="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-2xl shrink-0">📍</div>
         <div>
           <div class="flex items-center gap-2">
-            <span class="bg-amber-500/20 text-amber-300 border border-amber-400/40 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider hindi">पायलट प्रदर्शन (একल आंगनवाड़ी)</span>
-            <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider hindi">लाइव सक्रिय</span>
+            <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider hindi">पायलट जिला (Pilot District)</span>
           </div>
-          <h2 class="text-lg font-bold mt-1 hindi">आंगनवाड़ी केंद्र: सोहागपुर नगर &nbsp;|&nbsp; AWC ID: AWC-SHA-1001</h2>
-          <p class="text-xs text-amber-200 mt-1 font-medium hindi bg-amber-500/10 border border-amber-400/20 rounded-lg px-3 py-1.5 inline-block">
-            📌 नोट: यह प्रतिवेदन पायलट प्रदर्शन हेतु एकल आंगनवाड़ी के वास्तविक डेटा पर आधारित है।
-          </p>
+          <h2 class="text-lg font-bold mt-1 hindi">जिला: {{ district }} &nbsp;|&nbsp; CDPO: {{ cdpo_name }}</h2>
         </div>
       </div>
       <div class="flex items-center gap-3">
         <a href="/api/v1/reports/pdf?inline=true" target="_blank"
-          class="bg-amber-500 hover:bg-amber-600 text-gov-950 text-xs font-bold px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 hindi">
-          📄 शासकीय एकल आंगनवाड़ी PDF रिपोर्ट
+          class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 hindi">
+          📄 शासकीय PDF रिपोर्ट
         </a>
       </div>
     </div>
@@ -260,7 +254,7 @@
     <!-- ─── KPI CARDS (5 METRICS) ─────────────────────────────────── -->
     <section id="kpi-section">
       <div class="flex items-center justify-between mb-3">
-        <h2 class="text-gov-800 font-bold text-base hindi">📊 आज का सारांश (पायलट प्रदर्शन)</h2>
+        <h2 class="text-gov-800 font-bold text-base hindi">📊 आज का सारांश (जिला प्रदर्शन)</h2>
         <span id="stats-timestamp" class="text-slate-400 text-xs">लोड हो रहा है…</span>
       </div>
 
@@ -415,15 +409,17 @@
           <thead>
             <tr>
               <th class="text-left">#</th>
-              <th class="text-left">AWC ID</th>
-              <th class="text-left">केंद्र नाम</th>
+              <th class="text-left">जिला</th>
               <th class="text-left">ब्लॉक</th>
-              <th class="text-left">कार्यकर्ता नाम</th>
+              <th class="text-left">सेक्टर</th>
+              <th class="text-left">पर्यवेक्षक</th>
+              <th class="text-left">आंगनवाड़ी</th>
               <th class="text-left">प्रेषण समय</th>
-              <th class="text-center">मीडिया</th>
-              <th class="text-center">जीपीएस स्थिति</th>
-              <th class="text-center">एआई स्कोर</th>
-              <th class="text-center">स्थिति</th>
+              <th class="text-center">पंजीकृत</th>
+              <th class="text-center">उपस्थित (AI)</th>
+              <th class="text-center">अंतर</th>
+              <th class="text-center">भोजन स्थिति</th>
+              <th class="text-center">सत्यापन स्थिति</th>
               <th class="text-center">एक्शन</th>
             </tr>
           </thead>
@@ -729,22 +725,32 @@
           ? `<span title="मीडिया प्राप्त">📷</span>`
           : `<span class="text-slate-300">—</span>`;
 
+        const registered = s.registered_children || 0;
+        const visible = s.visible_children || 0;
+        const difference = (visible > 0) ? (registered - visible) : 0;
+        
         return `
           <tr class="animate-fade-in">
             <td class="text-slate-400 text-xs">${((currentPage-1)*15)+idx+1}</td>
-            <td>
-              <span class="font-mono text-xs font-bold text-gov-700 bg-gov-50 px-2 py-0.5 rounded-md">${s.awc_id || '–'}</span>
-            </td>
-            <td class="hindi font-semibold text-slate-800">${s.center_name || '–'}</td>
+            <td class="hindi text-slate-800 font-medium">${s.district || '–'}</td>
             <td class="hindi text-slate-600">${s.block_name || '–'}</td>
+            <td class="hindi text-slate-600">${s.sector || '–'}</td>
             <td>
-              <div class="hindi font-medium text-slate-800">${s.worker_name || '–'}</div>
-              <div class="text-slate-400 text-xs font-mono">${s.worker_phone}</div>
+              <div class="hindi font-medium text-slate-800">${s.supervisor_name || '–'}</div>
             </td>
-            <td class="text-slate-600 text-xs whitespace-nowrap">${ts}</td>
-            <td class="text-center">${mediaIcon}</td>
-            <td class="text-center">${gpsPill}</td>
-            <td class="text-center">${aiScore}</td>
+            <td>
+              <div class="hindi font-semibold text-gov-700">${s.center_name || '–'}</div>
+              <div class="font-mono text-[10px] text-slate-400">${s.awc_id || '–'}</div>
+              <div class="hindi text-xs text-slate-500">${s.worker_name || '–'}</div>
+            </td>
+            <td class="text-slate-600 text-xs whitespace-nowrap">
+              ${ts} <br/>
+              ${mediaIcon} ${gpsPill}
+            </td>
+            <td class="text-center font-bold text-slate-600">${registered}</td>
+            <td class="text-center font-bold text-purple-700">${s.visible_children !== null ? s.visible_children : '–'}</td>
+            <td class="text-center font-bold ${difference > 10 ? 'text-red-500' : 'text-slate-500'}">${s.visible_children !== null ? difference : '–'}</td>
+            <td class="text-center hindi text-xs ${s.meal_status === 'भोजन उपस्थित' ? 'text-green-600' : (s.meal_status === 'भोजन नहीं' ? 'text-red-600' : 'text-slate-500')} font-semibold">${s.meal_status || '–'}</td>
             <td class="text-center">
               ${statusBadge}
               ${flagReason}
