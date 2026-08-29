@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <title>Daily Report</title>
+    <style>
+        @font-face {
+            font-family: 'NotoSansDevanagari';
+            src: url('{{ font_regular }}') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: 'NotoSansDevanagari';
+            src: url('{{ font_bold }}') format('truetype');
+            font-weight: bold;
+            font-style: normal;
+        }
+        
+        :root {
+            --gov-navy: #0f2942;
+            --gov-blue: #1e3a8a;
+            --bg-light: #f8fafc;
+            --text-dark: #0f172a;
+            --text-muted: #475569;
+            --border-grey: #e2e8f0;
+            --color-pass: #15803d;
+            --color-review: #b45309;
+            --color-fail: #b91c1c;
+            --color-saffron: #ff9933;
+            --color-white: #ffffff;
+            --color-green: #138808;
+        }
+
+        @page {
+            size: A4;
+            margin: 12mm 15mm;
+        }
+
+        body {
+            font-family: 'NotoSansDevanagari', sans-serif;
+            margin: 0;
+            padding: 0;
+            color: var(--text-dark);
+            background: white;
+            font-size: 10pt;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+
+        .tricolor {
+            display: flex;
+            height: 4px;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        .tricolor > div { flex: 1; }
+        .bg-saffron { background-color: var(--color-saffron); }
+        .bg-white { background-color: var(--color-white); border-bottom: 1px solid #ddd; }
+        .bg-green { background-color: var(--color-green); }
+
+        .header-container {
+            display: flex;
+            align-items: center;
+            border-bottom: 2px solid var(--gov-navy);
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+
+        .header-text {
+            flex: 1;
+            text-align: center;
+        }
+        .header-text h3 { margin: 0; font-size: 14pt; color: var(--text-dark); }
+        .header-text h1 { margin: 2px 0; font-size: 18pt; color: var(--gov-navy); }
+        .header-text h4 { margin: 0; font-size: 11pt; color: var(--text-muted); font-weight: normal; }
+
+        .meta-bar {
+            display: flex;
+            justify-content: space-between;
+            background: var(--bg-light);
+            border: 1px solid var(--border-grey);
+            padding: 8px 10px;
+            font-size: 9pt;
+            margin-bottom: 15px;
+        }
+
+        .section-title {
+            font-size: 13pt;
+            color: var(--gov-navy);
+            margin: 15px 0 10px 0;
+            border-bottom: 1px solid var(--border-grey);
+            padding-bottom: 4px;
+        }
+
+        /* KPI Cards */
+        .kpi-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .kpi-card {
+            flex: 1;
+            border: 1px solid var(--border-grey);
+            text-align: center;
+            padding: 10px 5px;
+            border-radius: 4px;
+        }
+        .kpi-card h2 { margin: 0 0 5px 0; font-size: 18pt; }
+        .kpi-card p { margin: 0; font-size: 9pt; color: var(--text-muted); line-height: 1.2; }
+        
+        .kpi-blue { background: #eff6ff; color: var(--gov-navy); }
+        .kpi-green { background: #f0fdf4; color: var(--color-pass); }
+        .kpi-orange { background: #fefce8; color: var(--color-review); }
+        .kpi-red { background: #fff1f2; color: var(--color-fail); }
+        .kpi-purple { background: #f5f3ff; color: #6b21a8; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9pt;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid var(--border-grey);
+            padding: 6px;
+            text-align: left;
+        }
+        th {
+            background: var(--bg-light);
+            font-weight: bold;
+            color: var(--gov-navy);
+        }
+        .text-center { text-align: center; }
+
+        .status-badge {
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 8pt;
+            font-weight: bold;
+            color: white;
+        }
+        .badge-pass { background: var(--color-pass); }
+        .badge-review { background: var(--color-review); }
+        .badge-fail { background: var(--color-fail); }
+
+        .sign-off {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 50px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 9pt;
+        }
+        .sign-line {
+            width: 30%;
+            border-top: 1px solid var(--text-muted);
+            padding-top: 5px;
+        }
+
+        .footer {
+            margin-top: 30px;
+            border-top: 1px solid var(--border-grey);
+            padding-top: 10px;
+            font-size: 8pt;
+            color: var(--text-muted);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="tricolor">
+        <div class="bg-saffron"></div>
+        <div class="bg-white"></div>
+        <div class="bg-green"></div>
+    </div>
+
+    <div class="header-container">
+        <div class="header-text">
+            <h3>महिला एवं बाल विकास विभाग, मध्य प्रदेश शासन</h3>
+            <h1>भारतओएस — शहडोल आंगनवाड़ी डिजिटल सत्यापन (DSS)</h1>
+            <h4>दैनिक कार्यकारी सत्यापन एवं निर्णय सहायता प्रतिवेदन (Official Decision Support Report)</h4>
+        </div>
+    </div>
+
+    <div class="meta-bar">
+        <div><b>रिपोर्ट तिथि:</b> {{ report_date }} | {{ filter_str }}</div>
+        <div><b>उत्पन्न समय:</b> {{ gen_time }}</div>
+    </div>
+
+    <h2 class="section-title">📊 कार्यकारी सारांश (Executive Summary)</h2>
+    <div class="kpi-container">
+        <div class="kpi-card kpi-blue">
+            <h2>{{ stats.reported_today }}</h2>
+            <p>प्राप्त रिपोर्ट<br/>(Reports Recd)</p>
+        </div>
+        <div class="kpi-card kpi-green">
+            <h2>{{ stats.approved_today }}</h2>
+            <p>सत्यापित / स्वीकृत<br/>(Verified)</p>
+        </div>
+        <div class="kpi-card kpi-orange">
+            <h2>{{ stats.flagged_today }}</h2>
+            <p>समीक्षा हेतु (फ्लैग्ड)<br/>(Flagged)</p>
+        </div>
+        <div class="kpi-card kpi-red">
+            <h2>{{ stats.pending_review }}</h2>
+            <p>अनरिपोर्टेड (लंबित)<br/>(Pending/Unreported)</p>
+        </div>
+        <div class="kpi-card kpi-purple">
+            <h2>{{ stats.coverage_percent }}%</h2>
+            <p>रिपोर्टिंग %<br/>(Reporting %)</p>
+        </div>
+    </div>
+
+    <h2 class="section-title">■ ब्लॉक-वार विवरण (Block-wise Breakdown)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ब्लॉक नाम</th>
+                <th class="text-center">कुल</th>
+                <th class="text-center">✓ सत्यापित</th>
+                <th class="text-center">⚑ फ्लैग्ड</th>
+                <th class="text-center">◎ लंबित</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in block_rows %}
+            <tr>
+                <td>{{ row.name }}</td>
+                <td class="text-center">{{ row.total }}</td>
+                <td class="text-center">{{ row.approved }}</td>
+                <td class="text-center">{{ row.flagged }}</td>
+                <td class="text-center">{{ row.pending }}</td>
+            </tr>
+            {% endfor %}
+            {% if not block_rows %}
+            <tr><td colspan="5" class="text-center">डेटा उपलब्ध नहीं</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <h2 class="section-title">📋 प्रेषण विवरण (Detailed Submissions — शीर्ष {{ submissions|length }} रिकॉर्ड)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th class="text-center">#</th>
+                <th>AWC ID</th>
+                <th>केंद्र नाम</th>
+                <th>ब्लॉक</th>
+                <th>कार्यकर्ता</th>
+                <th class="text-center">समय (IST)</th>
+                <th class="text-center">GPS</th>
+                <th class="text-center">स्थिति</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in submissions %}
+            <tr>
+                <td class="text-center">{{ loop.index }}</td>
+                <td>{{ s.awc_id }}</td>
+                <td>{{ s.center_name }}</td>
+                <td>{{ s.block_name }}</td>
+                <td>{{ s.worker_name }}</td>
+                <td class="text-center">{{ s.time }}</td>
+                <td class="text-center">{{ s.gps }}</td>
+                <td class="text-center">
+                    <span class="status-badge 
+                        {% if s.status == 'APPROVED' %}badge-pass
+                        {% elif s.status == 'FLAGGED' %}badge-review
+                        {% else %}badge-fail{% endif %}">
+                        {{ s.status }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not submissions %}
+            <tr><td colspan="8" class="text-center">कोई रिकॉर्ड नहीं मिला</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+    {% if overflow > 0 %}
+    <p style="font-size: 8pt; color: var(--text-muted);">... और {{ overflow }} अतिरिक्त रिकॉर्ड — पूर्ण डेटा के लिए CSV डाउनलोड करें।</p>
+    {% endif %}
+
+    <div class="sign-off">
+        <div class="sign-line">सेक्टर सुपरवाइजर<br/>संबंधित ब्लॉक</div>
+        <div class="sign-line">CDPO<br/>महिला एवं बाल विकास</div>
+        <div class="sign-line">DPO / CEO<br/>जिला पंचायत शहडोल</div>
+    </div>
+
+    <div class="footer">
+        यह रिपोर्ट BharatOS डिजिटल सत्यापन प्रणाली द्वारा स्वचालित रूप से उत्पन्न की गई है।<br/>
+        उत्पन्न: {{ gen_time }} | संस्करण: 3.0 (Playwright) | जिला शहडोल — मध्यप्रदेश | यह दस्तावेज़ आधिकारिक उपयोग के लिए है।
+    </div>
+
+</body>
+</html>

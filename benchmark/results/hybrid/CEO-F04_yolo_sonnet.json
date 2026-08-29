@@ -1,0 +1,187 @@
+{
+  "image_id": "CEO-F04",
+  "image_sha256": "01ef0a5afa6b0efa1fa6fd428bc6289889f6a5533d2785389bc2f2dc691d0800",
+  "yolo_model": "yolo11m.pt",
+  "yolo_person_count": 17,
+  "yolo_detections": [
+    {
+      "id": "P01",
+      "confidence": 0.89,
+      "bbox": [
+        1015,
+        213,
+        1137,
+        364
+      ]
+    },
+    {
+      "id": "P02",
+      "confidence": 0.865,
+      "bbox": [
+        79,
+        194,
+        266,
+        402
+      ]
+    },
+    {
+      "id": "P03",
+      "confidence": 0.851,
+      "bbox": [
+        262,
+        179,
+        422,
+        382
+      ]
+    },
+    {
+      "id": "P04",
+      "confidence": 0.831,
+      "bbox": [
+        419,
+        175,
+        550,
+        358
+      ]
+    },
+    {
+      "id": "P05",
+      "confidence": 0.825,
+      "bbox": [
+        1152,
+        247,
+        1317,
+        447
+      ]
+    },
+    {
+      "id": "P06",
+      "confidence": 0.805,
+      "bbox": [
+        22,
+        633,
+        304,
+        1077
+      ]
+    },
+    {
+      "id": "P07",
+      "confidence": 0.783,
+      "bbox": [
+        563,
+        177,
+        671,
+        345
+      ]
+    },
+    {
+      "id": "P08",
+      "confidence": 0.779,
+      "bbox": [
+        1396,
+        347,
+        1558,
+        539
+      ]
+    },
+    {
+      "id": "P09",
+      "confidence": 0.759,
+      "bbox": [
+        0,
+        530,
+        187,
+        878
+      ]
+    },
+    {
+      "id": "P10",
+      "confidence": 0.742,
+      "bbox": [
+        892,
+        173,
+        1005,
+        334
+      ]
+    },
+    {
+      "id": "P11",
+      "confidence": 0.731,
+      "bbox": [
+        1287,
+        309,
+        1438,
+        484
+      ]
+    },
+    {
+      "id": "P12",
+      "confidence": 0.73,
+      "bbox": [
+        1486,
+        407,
+        1599,
+        609
+      ]
+    },
+    {
+      "id": "P13",
+      "confidence": 0.643,
+      "bbox": [
+        677,
+        172,
+        796,
+        343
+      ]
+    },
+    {
+      "id": "P14",
+      "confidence": 0.501,
+      "bbox": [
+        795,
+        174,
+        936,
+        346
+      ]
+    },
+    {
+      "id": "P15",
+      "confidence": 0.412,
+      "bbox": [
+        800,
+        184,
+        888,
+        307
+      ]
+    },
+    {
+      "id": "P16",
+      "confidence": 0.345,
+      "bbox": [
+        0,
+        301,
+        51,
+        378
+      ]
+    },
+    {
+      "id": "P17",
+      "confidence": 0.278,
+      "bbox": [
+        0,
+        362,
+        157,
+        546
+      ]
+    }
+  ],
+  "sonnet_model": "anthropic/claude-sonnet-4.5",
+  "prompt_version": "yolo_sonnet_child_count_v1",
+  "prompt_sha256": "845d296bf430704ac0d0e356741494ce868597197e01a26cf7c1e59fd1ebe5d9",
+  "final_child_count": null,
+  "latency_yolo": 16.8029,
+  "latency_sonnet": 14.2517,
+  "latency_total": 31.0546,
+  "raw_sonnet_response": "I'll systematically count the children in this Anganwadi image by examining each detected box and searching for any missed children.\n\n**Analyzing each detection from the annotated image:**\n\n**Back row (left to right):**\n- P02: Child in pink\n- P04: Child with long hair\n- P11: Child in white/pink\n- P13: Child in pink\n- P14: Child (darker clothing)\n- P10: Child in orange\n\n**Middle section:**\n- P07: Child (partially visible, darker area)\n- P01: Child in pink/purple\n- P05: Child (right side)\n\n**Right side/corner:**\n- P15: Child in yellow/beige\n- P08: Child \n- P12: Child in pink\n\n**Left side/foreground:**\n- P03: Child (left edge)\n- P09: Child (left foreground)\n- P06: Child (bottom left)\n\n**Verification on original image:**\nExamining the original image, I can see children seated in a U-shape around plates of food. Counting systematically:\n- Back row: 6 children clearly visible\n- Right side: 4 children\n- Left side: 5 children\n\nTotal visible children: **15**\n\nAll detections appear to be children (no adults detected in the boxes), and cross-referencing with the original image confirms all visible children have been accounted for.\n\n{\"child_count\": 15}",
+  "timestamp": "2026-08-05T08:33:48.722592+00:00"
+}

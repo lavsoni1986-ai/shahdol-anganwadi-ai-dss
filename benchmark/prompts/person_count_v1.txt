@@ -1,0 +1,23 @@
+You are performing a strict visual PERSON-COUNTING benchmark.
+
+Carefully inspect the ENTIRE uploaded image and determine the total number of distinct PEOPLE visibly present.
+
+COUNTING RULES:
+
+1. Count every visible person exactly once.
+2. Count both adults and children, if any.
+3. Include partially occluded people when there is sufficient visual evidence that they are a distinct person.
+4. A clearly visible face/head belonging to a distinct person should be counted even if much of their body is hidden behind another person.
+5. Carefully inspect the LEFT, CENTER, RIGHT, FOREGROUND and BACKGROUND of the image.
+6. Pay special attention to people standing behind others who may be partially hidden.
+7. Do NOT count the same person twice.
+8. Do NOT count photographs, posters, statues, reflections, or images of people as real persons.
+9. Do NOT estimate people outside the visible frame.
+10. Do not use assumptions about how many people should normally be present.
+11. Before finalizing, internally verify that every distinct visible person has been counted once.
+
+This is an accuracy benchmark, not a scene-description task.
+
+Return ONLY:
+
+{"person_count": <integer>}

@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="hi" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>जिला शहडोल — आंगनवाड़ी डिजिटल सत्यापन डैशबोर्ड | BharatOS</title>
+  <meta name="description" content="BharatOS District Shahdol Anganwadi Digital Verification & Decision Support Dashboard for District Officers" />
+
+  <!-- Google Fonts: Inter for numbers/UI, Tiro Devanagari Hindi for Hindi text -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Tiro+Devanagari+Hindi&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            hindi: ['Tiro Devanagari Hindi', 'serif'],
+          },
+          colors: {
+            gov: {
+              50:  '#eff6ff',
+              100: '#dbeafe',
+              200: '#bfdbfe',
+              300: '#93c5fd',
+              400: '#60a5fa',
+              500: '#1a56db',
+              600: '#1e40af',
+              700: '#1e3a8a',
+              800: '#1e3164',
+              900: '#0f1f42',
+            },
+            saffron: '#FF9933',
+            indiagreen: '#138808',
+          },
+          animation: {
+            'fade-in': 'fadeIn 0.4s ease-out',
+            'slide-up': 'slideUp 0.35s ease-out',
+            'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
+            'count-up': 'countUp 0.8s ease-out',
+          },
+          keyframes: {
+            fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+            slideUp: { '0%': { opacity: '0', transform: 'translateY(16px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+            pulseSoft: { '0%,100%': { opacity: '1' }, '50%': { opacity: '0.6' } },
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Firebase Auth (Web SDK — compat build for vanilla JS, no bundler) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script>
+    // ── Firebase Web configuration (public values — NOT server secrets) ──
+    // Replace with your Firebase project's web app config from Project Settings.
+    const firebaseConfig = {
+      apiKey: "YOUR_FIREBASE_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+    };
+    let firebaseReady = false;
+    try {
+      firebase.initializeApp(firebaseConfig);
+      firebaseReady = true;
+    } catch (e) {
+      console.warn("Firebase not configured (login disabled):", e.message);
+    }
+
+    async function getAuthToken() {
+      if (!firebaseReady) return null;
+      const user = firebase.auth().currentUser;
+      if (!user) return null;
+      try { return await user.getIdToken(true); } catch (e) { return null; }
+    }
+
+    async function authFetch(url, options = {}) {
+      const token = await getAuthToken();
+      const headers = { ...(options.headers || {}) };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      return fetch(url, { ...options, headers });
+    }
+
+    function showLogin() {
+      const overlay = document.getElementById('login-overlay');
+      if (overlay) overlay.classList.remove('hidden');
+    }
+    function hideLogin() {
+      const overlay = document.getElementById('login-overlay');
+      if (overlay) overlay.classList.add('hidden');
+    }
+
+    async function handleLogin() {
+      const email = document.getElementById('login-email').value;
+      const password = document.getElementById('login-password').value;
+      const btn = document.getElementById('login-btn');
+      const err = document.getElementById('login-error');
+      btn.disabled = true; btn.textContent = 'साइन इन हो रहा है…';
+      err.textContent = '';
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+        hideLogin();
+      } catch (e) {
+        err.textContent = e.message;
+      } finally {
+        btn.disabled = false; btn.textContent = 'साइन इन';
+      }
+    }
+
+    async function handleLogout() {
+      if (firebaseReady) await firebase.auth().signOut();
+      window.location.reload();
+    }
+
+    if (firebaseReady) {
+      firebase.auth().onAuthStateChanged(async (user) => {
+        if (user) {
+          hideLogin();
+          await loadDashboard();
+        } else {
+          showLogin();
+        }
+      });
+    } else {
+      // Firebase not configured — show dashboard content anyway (API calls will 401)
+      document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('login-overlay').classList.add('hidden');
+      });
+    }
+  </script>
+
+  <!-- Login Overlay -->
+  <div id="login-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-gov-900 via-gov-800 to-gov-700">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4">
+      <div class="text-center mb-6">
+        <div class="text-3xl mb-2">🏛️</div>
+        <h2 class="text-xl font-bold text-gov-800 hindi">जिला शहडोल आंगनवाड़ी डैशबोर्ड</h2>
+        <p class="text-sm text-slate-500 mt-1 hindi">कृपया लॉगिन करें (Officer Login)</p>
+      </div>
+      <div class="space-y-4">
+        <input id="login-email" type="email" placeholder="ईमेल (Email)" class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gov-500 text-sm" />
+        <input id="login-password" type="password" placeholder="पासवर्ड (Password)" class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gov-500 text-sm" />
+        <div id="login-error" class="text-red-600 text-sm hindi"></div>
+        <button id="login-btn" onclick="handleLogin()" class="w-full bg-gov-600 hover:bg-gov-700 text-white font-bold py-3 rounded-xl transition text-sm hindi">
+          साइन इन
+        </button>
+      </div>
+      <div class="mt-4 text-center">
+        <button onclick="handleLogout()" class="text-xs text-slate-400 hover:text-slate-600 underline">साइन आउट</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #f0f4f8; }
+    .hindi { font-family: 'Tiro Devanagari Hindi', 'Inter', serif; }
+
+    /* Ashoka-inspired header gradient */
+    .gov-header {
+      background: linear-gradient(135deg, #0f1f42 0%, #1e3a8a 45%, #1a56db 100%);
+    }
+    .tricolor-bar {
+      height: 5px;
+      background: linear-gradient(90deg, #FF9933 33.33%, #ffffff 33.33% 66.66%, #138808 66.66%);
+    }
+
+    /* KPI Cards */
+    .kpi-card {
+      background: #ffffff;
+      border-radius: 16px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(30,58,138,.12);
+    }
+
+    /* Table styles */
+    .data-table thead th {
+      background: #1e3a8a;
+      color: #ffffff;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 12px 14px;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    .data-table tbody tr {
+      border-bottom: 1px solid #e2e8f0;
+      transition: background 0.15s;
+    }
+    .data-table tbody tr:hover { background: #eff6ff; }
+    .data-table tbody td { padding: 11px 14px; font-size: 0.82rem; vertical-align: middle; }
+
+    /* Status badges */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 9999px;
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .badge-received  { background: #dbeafe; color: #1e40af; }
+    .badge-approved  { background: #dcfce7; color: #166534; }
+    .badge-flagged   { background: #fef9c3; color: #92400e; }
+    .badge-rejected  { background: #fee2e2; color: #991b1b; }
+    .badge-processed { background: #e0e7ff; color: #3730a3; }
+
+    /* Modal overlay */
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 50;
+      background: rgba(15, 31, 66, 0.65);
+      backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      animation: fadeIn 0.2s ease;
+    }
+    .modal-box {
+      background: #fff;
+      border-radius: 20px;
+      width: 92%; max-width: 680px;
+      max-height: 92vh; overflow-y: auto;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.25);
+      animation: slideUp 0.3s ease;
+    }
+
+    /* Toast notifications */
+    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+    .toast {
+      padding: 14px 20px; border-radius: 12px; font-size: 0.85rem; font-weight: 600;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15); min-width: 280px; max-width: 380px;
+      display: flex; align-items: center; gap: 10px;
+      animation: slideUp 0.3s ease;
+    }
+    .toast-success { background: #dcfce7; color: #166534; border-left: 4px solid #16a34a; }
+    .toast-error   { background: #fee2e2; color: #991b1b; border-left: 4px solid #dc2626; }
+    .toast-info    { background: #dbeafe; color: #1e40af; border-left: 4px solid #2563eb; }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+
+    /* Loader */
+    .spinner {
+      width: 32px; height: 32px; border: 3px solid #dbeafe;
+      border-top-color: #1e3a8a; border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Search input */
+    .search-input:focus { outline: none; border-color: #1a56db; box-shadow: 0 0 0 3px rgba(26,86,219,0.15); }
+
+    /* GPS pill */
+    .gps-pill { display: inline-flex; align-items: center; gap: 4px; background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; padding: 2px 8px; border-radius: 9999px; font-size: 0.7rem; }
+    .gps-none  { background: #fafafa; color: #94a3b8; border: 1px solid #e2e8f0; }
+
+    /* Live dot */
+    .live-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; animation: pulseSoft 1.5s ease-in-out infinite; display: inline-block; }
+    @keyframes pulseSoft { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+
+    /* Action button */
+    .btn-primary { background: #1e3a8a; color: #fff; border-radius: 10px; padding: 8px 20px; font-weight: 600; font-size: 0.85rem; transition: background 0.2s; cursor: pointer; border: none; }
+    .btn-primary:hover { background: #1e40af; }
+    .btn-approve { background: #16a34a; color: #fff; border-radius: 10px; padding: 10px 24px; font-weight: 700; font-size: 0.88rem; cursor: pointer; border: none; transition: background 0.2s; }
+    .btn-approve:hover { background: #15803d; }
+    .btn-flag { background: #d97706; color: #fff; border-radius: 10px; padding: 10px 24px; font-weight: 700; font-size: 0.88rem; cursor: pointer; border: none; transition: background 0.2s; }
+    .btn-flag:hover { background: #b45309; }
+    .btn-close { background: #f1f5f9; color: #64748b; border-radius: 10px; padding: 10px 20px; font-weight: 600; font-size: 0.85rem; cursor: pointer; border: 1px solid #e2e8f0; transition: background 0.2s; }
+    .btn-close:hover { background: #e2e8f0; }
+  </style>
+</head>
+
+<body class="min-h-screen">
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- Tricolor stripe at the very top                               -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <div class="tricolor-bar"></div>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- HEADER                                                        -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <header class="gov-header text-white shadow-xl">
+    <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+
+      <!-- Left: Logo + Title -->
+      <div class="flex items-center gap-4">
+        <!-- Ashoka Chakra placeholder emblem -->
+        <div class="w-14 h-14 rounded-full bg-white/10 border-2 border-white/30 flex items-center justify-center text-2xl shrink-0">🇮🇳</div>
+        <div>
+          <div class="text-saffron text-xs font-semibold tracking-widest uppercase mb-0.5">महिला एवं बाल विकास विभाग — मध्य प्रदेश शासन</div>
+          <h1 class="hindi text-lg sm:text-xl font-bold leading-tight text-white">
+            शहडोल आंगनवाड़ी डिजिटल सत्यापन एवं निर्णय सहायता प्रणाली (DSS)
+          </h1>
+          <div class="text-blue-200 text-xs mt-1 flex items-center gap-2">
+            <span class="live-dot"></span>
+            <span id="live-clock">--:-- AM IST</span>
+            &nbsp;·&nbsp;
+            <span class="font-bold text-white hindi">आंगनवाड़ी डिजिटल सत्यापन प्रतिवेदन</span>
+            &nbsp;·&nbsp;
+            <span class="hindi">जिला: {{ district }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Officer badge + refresh -->
+      <div class="flex items-center gap-3">
+        <button onclick="loadDashboard()" title="Refresh Data"
+          class="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl px-4 py-2 text-sm font-medium transition-all">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          ताज़ा करें
+        </button>
+        <div class="bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-center">
+          <div class="text-blue-200 text-xs">अधिकारी</div>
+          <div class="text-white text-sm font-semibold hindi">जिला अधिकारी / CEO</div>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- MAIN CONTENT                                                   -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <main class="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- ─── DISTRICT PILOT BANNER ─────── -->
+    <div class="bg-gradient-to-r from-blue-900 via-indigo-900 to-gov-900 border border-blue-700/50 rounded-2xl p-5 text-white shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-2xl shrink-0">📍</div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider hindi">पायलट जिला (Pilot District)</span>
+          </div>
+          <h2 class="text-lg font-bold mt-1 hindi">जिला: {{ district }} &nbsp;|&nbsp; CDPO: {{ cdpo_name }}</h2>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="downloadReport('pdf')"
+          class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 hindi">
+          📄 शासकीय PDF रिपोर्ट
+        </button>
+        <button onclick="handleLogout()"
+          class="text-xs text-slate-400 hover:text-slate-600 underline hindi">
+          साइन आउट
+        </button>
+      </div>
+    </div>
+
+    <!-- ─── KPI CARDS (5 METRICS) ─────────────────────────────────── -->
+    <section id="kpi-section">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-gov-800 font-bold text-base hindi">📊 आज का सारांश (जिला प्रदर्शन)</h2>
+        <span id="stats-timestamp" class="text-slate-400 text-xs">लोड हो रहा है…</span>
+      </div>
+
+      <!-- KPI Grid (5 Cards Layout) -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4" id="kpi-grid">
+
+        <!-- Card 1: Total Centres -->
+        <div class="kpi-card p-4">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-slate-500 text-xs font-semibold uppercase tracking-wide hindi">कुल केंद्र</p>
+              <p class="text-2xl font-extrabold text-gov-800 mt-1" id="kpi-total">1</p>
+              <p class="text-slate-400 text-[11px] mt-1 hindi">सोहागपुर नगर (AWC-SHA-1001)</p>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-gov-100 flex items-center justify-center text-lg">🏛️</div>
+          </div>
+        </div>
+
+        <!-- Card 2: Reported Today -->
+        <div class="kpi-card p-4">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-slate-500 text-xs font-semibold uppercase tracking-wide hindi">आज प्राप्त रिपोर्ट</p>
+              <p class="text-2xl font-extrabold text-indigo-700 mt-1" id="kpi-reported">1</p>
+              <p class="text-slate-400 text-[11px] mt-1 hindi">WhatsApp सबमिशन</p>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-lg">📨</div>
+          </div>
+        </div>
+
+        <!-- Card 3: AI Verified -->
+        <div class="kpi-card p-4">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-slate-500 text-xs font-semibold uppercase tracking-wide hindi">AI द्वारा सत्यापित</p>
+              <p class="text-2xl font-extrabold text-emerald-700 mt-1" id="kpi-approved">1</p>
+              <p class="text-slate-400 text-[11px] mt-1 hindi">मानकों के अनुरूप</p>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-lg">✅</div>
+          </div>
+        </div>
+
+        <!-- Card 4: Review Required / Flagged -->
+        <div class="kpi-card p-4">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-slate-500 text-xs font-semibold uppercase tracking-wide hindi">समीक्षा आवश्यक</p>
+              <p class="text-2xl font-extrabold text-amber-600 mt-1" id="kpi-pending">0</p>
+              <p class="text-slate-400 text-[11px] mt-1 hindi">अपवाद / फ्लैग्ड</p>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-lg">⚠️</div>
+          </div>
+        </div>
+
+        <!-- Card 5: Reporting Percentage -->
+        <div class="kpi-card p-4">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-slate-500 text-xs font-semibold uppercase tracking-wide hindi">रिपोर्टिंग प्रतिशत</p>
+              <p class="text-2xl font-extrabold text-gov-800 mt-1" id="kpi-coverage">100%</p>
+              <p class="text-slate-400 text-[11px] mt-1 hindi">समयबद्ध प्रेषण</p>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-lg">📈</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ─── SUBMISSIONS TABLE ─────────────────────────────────────── -->
+    <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+
+      <!-- Table Header Bar -->
+      <div class="bg-gov-900 px-5 py-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-white font-bold text-base hindi">📋 प्रेषण रिपोर्ट (एकल आंगनवाड़ी सोहागपुर नगर)</h2>
+          <p class="text-blue-200 text-xs mt-0.5 hindi">
+            आंगनवाड़ी केंद्र सोहागपुर नगर (AWC-SHA-1001) कार्यकर्ता लव सोनी द्वारा WhatsApp-आधारित फोटो सबमिशन
+          </p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- Date filter -->
+          <input type="date" id="filter-date" onchange="applyFilters()"
+            class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white text-slate-700 focus:ring-2 focus:ring-gov-500 focus:outline-none" />
+          
+          <!-- Block filter -->
+          <select id="filter-block" onchange="applyFilters()"
+            class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white text-slate-700 focus:ring-2 focus:ring-gov-500 focus:outline-none hindi">
+            <option value="">सभी ब्लॉक</option>
+            <option value="सोहागपुर">सोहागपुर</option>
+            <option value="ब्योहारी">ब्योहारी</option>
+            <option value="जयसिंहनगर">जयसिंहनगर</option>
+            <option value="बुढार">बुढार</option>
+            <option value="गोहपारू">गोहपारू</option>
+          </select>
+
+          <!-- Status filter dropdown -->
+          <select id="filter-status"
+            onchange="applyFilters()"
+            class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white text-slate-700 focus:ring-2 focus:ring-gov-500 focus:outline-none hindi">
+            <option value="">सभी स्थिति</option>
+            <option value="RECEIVED">प्राप्त</option>
+            <option value="APPROVED">अनुमोदित</option>
+            <option value="FLAGGED">फ्लैग्ड</option>
+            <option value="REJECTED">अस्वीकृत</option>
+          </select>
+
+          <!-- Search box -->
+          <div class="relative">
+            <svg class="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input id="search-input" type="text" placeholder="खोजें: केंद्र, ब्लॉक…"
+              oninput="debounceSearch()"
+              class="search-input text-xs border border-slate-300 rounded-lg pl-8 pr-3 py-2 w-48 bg-white text-slate-700 transition-all hindi" />
+          </div>
+
+          <div class="h-6 w-px bg-slate-600 mx-1 hidden lg:block"></div>
+
+          <!-- PDF Export button -->
+          <button onclick="downloadReport('pdf')"
+            class="text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 font-medium transition-colors flex items-center gap-1.5 hindi">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+            PDF रिपोर्ट
+          </button>
+          
+          <!-- Excel Export button -->
+          <button onclick="downloadReport('excel')"
+            class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 font-medium transition-colors flex items-center gap-1.5 hindi">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            Excel
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading state -->
+      <div id="table-loading" class="flex items-center justify-center py-16 gap-3">
+        <div class="spinner"></div>
+        <span class="text-slate-500 text-sm hindi">डेटा लोड हो रहा है…</span>
+      </div>
+
+      <!-- Empty state -->
+      <div id="table-empty" class="hidden flex-col items-center justify-center py-16 gap-3 text-center">
+        <div class="text-5xl">📭</div>
+        <p class="text-slate-600 font-semibold hindi">आज कोई रिपोर्ट प्राप्त नहीं हुई</p>
+        <p class="text-slate-400 text-xs">WhatsApp submissions will appear here in real-time</p>
+      </div>
+
+      <!-- Table -->
+      <div id="table-wrapper" class="hidden overflow-x-auto">
+        <table class="data-table w-full min-w-[900px]">
+          <thead>
+            <tr>
+              <th class="text-left">#</th>
+              <th class="text-left">जिला</th>
+              <th class="text-left">ब्लॉक</th>
+              <th class="text-left">सेक्टर</th>
+              <th class="text-left">पर्यवेक्षक</th>
+              <th class="text-left">आंगनवाड़ी</th>
+              <th class="text-left">प्रेषण समय</th>
+              <th class="text-center">पंजीकृत</th>
+              <th class="text-center">उपस्थित (AI)</th>
+              <th class="text-center">अंतर</th>
+              <th class="text-center">भोजन स्थिति</th>
+              <th class="text-center">सत्यापन स्थिति</th>
+              <th class="text-center">एक्शन</th>
+            </tr>
+          </thead>
+          <tbody id="submissions-tbody">
+            <!-- Rows injected by JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div id="pagination-bar" class="hidden px-5 py-3 border-t border-slate-100 flex items-center justify-between flex-wrap gap-3 bg-slate-50">
+        <p class="text-slate-500 text-xs" id="pagination-info">–</p>
+        <div class="flex items-center gap-1.5">
+          <button id="prev-page" onclick="changePage(-1)"
+            class="text-xs border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors">← पिछला</button>
+          <div id="page-numbers" class="flex gap-1"></div>
+          <button id="next-page" onclick="changePage(1)"
+            class="text-xs border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors">अगला →</button>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- REVIEW MODAL                                                   -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <div id="review-modal" class="modal-backdrop hidden" onclick="closeModal(event)">
+    <div class="modal-box" onclick="event.stopPropagation()">
+
+      <!-- Modal Header -->
+      <div class="bg-gov-900 rounded-t-2xl px-6 py-5 flex items-center justify-between">
+        <div>
+          <h3 class="text-white font-bold text-base hindi">🔍 सबमिशन समीक्षा</h3>
+          <p class="text-blue-200 text-xs mt-0.5" id="modal-submission-id">–</p>
+        </div>
+        <button onclick="document.getElementById('review-modal').classList.add('hidden')"
+          class="text-white/60 hover:text-white transition-colors text-xl font-light">✕</button>
+      </div>
+
+      <div class="p-6 space-y-5">
+
+        <!-- Submission Details Grid -->
+        <div class="grid grid-cols-2 gap-4 bg-slate-50 rounded-xl p-4 border border-slate-200">
+          <div>
+            <p class="text-slate-400 text-xs font-semibold uppercase tracking-wide">AWC ID</p>
+            <p class="text-slate-800 font-bold text-sm mt-0.5" id="modal-awc-id">–</p>
+          </div>
+          <div>
+            <p class="text-slate-400 text-xs font-semibold uppercase tracking-wide hindi">केंद्र नाम</p>
+            <p class="text-slate-800 font-bold text-sm mt-0.5 hindi" id="modal-center">–</p>
+          </div>
+          <div>
+            <p class="text-slate-400 text-xs font-semibold uppercase tracking-wide hindi">ब्लॉक</p>
+            <p class="text-slate-800 font-semibold text-sm mt-0.5 hindi" id="modal-block">–</p>
+          </div>
+          <div>
+            <p class="text-slate-400 text-xs font-semibold uppercase tracking-wide hindi">कार्यकर्ता</p>
+            <p class="text-slate-800 font-semibold text-sm mt-0.5 hindi" id="modal-worker">–</p>
+          </div>
+          <div>
+            <p class="text-slate-400 text-xs font-semibold uppercase tracking-wide hindi">प्रेषण समय</p>
+            <p class="text-slate-800 font-semibold text-sm mt-0.5" id="modal-time">–</p>
+          </div>
+          <div>
+            <p class="text-slate-400 text-xs font-semibold uppercase tracking-wide hindi">वर्तमान स्थिति</p>
+            <p class="text-sm mt-0.5" id="modal-status-badge">–</p>
+          </div>
+        </div>
+
+        <!-- GPS Coordinates -->
+        <div id="modal-gps-section" class="bg-green-50 rounded-xl p-4 border border-green-200 hidden">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-green-600 text-sm">📍</span>
+            <p class="text-green-700 font-semibold text-sm hindi">जीपीएस स्थान</p>
+          </div>
+          <div class="flex gap-6">
+            <div>
+              <p class="text-green-600 text-xs">अक्षांश (Latitude)</p>
+              <p class="text-green-800 font-mono font-bold text-sm" id="modal-lat">–</p>
+            </div>
+            <div>
+              <p class="text-green-600 text-xs">देशांतर (Longitude)</p>
+              <p class="text-green-800 font-mono font-bold text-sm" id="modal-lon">–</p>
+            </div>
+          </div>
+          <a id="modal-maps-link" href="#" target="_blank"
+            class="mt-2 inline-flex items-center gap-1 text-xs text-green-600 hover:text-green-800 underline">
+            🗺️ Google Maps पर खोलें
+          </a>
+        </div>
+
+        <!-- Media Info -->
+        <div class="bg-blue-50 rounded-xl p-4 border border-blue-200">
+          <p class="text-blue-700 font-semibold text-sm hindi mb-2">📸 मीडिया विवरण</p>
+          <div class="bg-white border border-blue-200 rounded-lg p-4 flex items-center justify-center gap-3 min-h-[80px]">
+            <div id="modal-media-placeholder" class="text-center">
+              <div class="text-3xl mb-1">🖼️</div>
+              <p class="text-slate-400 text-xs hindi" id="modal-media-desc">मीडिया ID: –</p>
+              <p class="text-slate-300 text-xs">Day 4: AI/OCR के बाद यहाँ फोटो दिखेगी</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Score Placeholder -->
+        <div class="bg-purple-50 rounded-xl p-4 border border-purple-200">
+          <p class="text-purple-700 font-semibold text-sm mb-2">🤖 एआई सत्यापन स्कोर</p>
+          <div class="flex items-center gap-3">
+            <div class="flex-1 h-3 bg-purple-100 rounded-full overflow-hidden">
+              <div class="h-full bg-purple-300 rounded-full w-0 transition-all" id="modal-ai-bar"></div>
+            </div>
+            <span class="text-purple-600 font-bold text-sm w-12 text-right" id="modal-ai-score">N/A</span>
+          </div>
+          <p class="text-purple-400 text-xs mt-1">Day 4 pipeline में उपलब्ध होगा</p>
+        </div>
+
+        <!-- Divider -->
+        <hr class="border-slate-200" />
+
+        <!-- Review Form -->
+        <div class="space-y-4" id="review-form-section">
+          <h4 class="text-slate-700 font-bold text-sm hindi">✍️ समीक्षा निर्णय</h4>
+
+          <!-- Flag Reason (shown only when flagging) -->
+          <div id="flag-reason-section" class="hidden">
+            <label class="block text-slate-600 text-xs font-semibold mb-1 hindi">फ्लैग करने का कारण *</label>
+            <select id="flag-reason-select"
+              class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+              <option value="">— कारण चुनें —</option>
+              <option value="Blur Image">धुंधली छवि (Blur Image)</option>
+              <option value="Wrong Center Photo">गलत केंद्र की फोटो</option>
+              <option value="Outside Geofence">जियोफेंस से बाहर</option>
+              <option value="Duplicate Submission">डुप्लीकेट सबमिशन</option>
+              <option value="Incomplete Data">अधूरी जानकारी</option>
+              <option value="Suspicious Activity">संदिग्ध गतिविधि</option>
+            </select>
+          </div>
+
+          <!-- Remarks -->
+          <div>
+            <label class="block text-slate-600 text-xs font-semibold mb-1 hindi">टिप्पणी (वैकल्पिक)</label>
+            <textarea id="reviewer-remarks" rows="3"
+              placeholder="अधिकारी की टिप्पणी यहाँ लिखें…"
+              class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gov-400 resize-none hindi"></textarea>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex gap-3 flex-wrap pt-1">
+            <button id="btn-approve-modal" onclick="submitReview('APPROVED')"
+              class="btn-approve flex items-center gap-2">
+              ✅ <span class="hindi">अनुमोदित करें</span>
+            </button>
+            <button id="btn-flag-modal" onclick="showFlagForm()"
+              class="btn-flag flex items-center gap-2">
+              ⚠️ <span class="hindi">फ्लैग करें</span>
+            </button>
+            <button id="btn-confirm-flag" onclick="submitReview('FLAGGED')" class="hidden btn-flag flex items-center gap-2">
+              ⚠️ <span class="hindi">फ्लैग कन्फर्म करें</span>
+            </button>
+            <button onclick="document.getElementById('review-modal').classList.add('hidden')"
+              class="btn-close hindi">रद्द करें</button>
+          </div>
+        </div>
+
+        <!-- Already reviewed notice -->
+        <div id="already-reviewed-notice" class="hidden bg-slate-50 rounded-xl p-4 border border-slate-200 text-center">
+          <p class="text-slate-500 text-sm hindi" id="already-reviewed-text">यह रिपोर्ट पहले ही समीक्षित की जा चुकी है।</p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- JAVASCRIPT                                                     -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <script>
+    // ─── State ────────────────────────────────────────────────────
+    const API_BASE = '';     // Same origin — FastAPI serves both
+    let currentPage = 1;
+    let currentSearch = '';
+    let currentStatus = '';
+    let currentDate = '';
+    let currentBlock = '';
+    let totalPages = 1;
+    let currentSubmission = null;  // Submission object open in modal
+    let searchTimer = null;
+
+    // ─── Clock ────────────────────────────────────────────────────
+    function updateClock() {
+      const now = new Date();
+      const opts = { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+      document.getElementById('live-clock').textContent = now.toLocaleTimeString('en-IN', opts) + ' IST';
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // ─── Auto-refresh every 60 seconds ────────────────────────────
+    setInterval(() => loadDashboard(), 60000);
+
+    // ─── Load dashboard on boot ───────────────────────────────────
+    // Dashboard load is gated by Firebase auth state (onAuthStateChanged).
+    // If Firebase is not configured, fall back to loading directly.
+    if (!firebaseReady) {
+      window.addEventListener('DOMContentLoaded', loadDashboard);
+    }
+
+    async function loadDashboard() {
+      await Promise.all([loadStats(), loadSubmissions()]);
+    }
+
+    // ─── KPI Stats ────────────────────────────────────────────────
+    async function loadStats() {
+      try {
+        const params = new URLSearchParams();
+        if (currentDate) params.append('date', currentDate);
+        if (currentBlock) params.append('block_name', currentBlock);
+
+        const res = await authFetch(`${API_BASE}/api/v1/dashboard/stats?${params}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const d = await res.json();
+
+        animateNumber('kpi-total', d.total_awc_centres);
+        animateNumber('kpi-reported', d.reported_today);
+        animateNumber('kpi-approved', d.approved_today);
+        animateNumber('kpi-pending', d.pending_review);
+        document.getElementById('kpi-flagged-sub').textContent = d.flagged_today;
+        document.getElementById('stats-timestamp').textContent = `अपडेट: ${d.as_of}`;
+
+        // Coverage bar
+        const cov = Math.min(d.coverage_percent, 100);
+        document.getElementById('kpi-coverage-bar').style.width = cov + '%';
+        document.getElementById('kpi-coverage-text').textContent = `कवरेज: ${cov}%`;
+
+        // Approved bar
+        if (d.reported_today > 0) {
+          const appPct = Math.min((d.approved_today / d.reported_today) * 100, 100);
+          document.getElementById('approved-bar').style.width = appPct + '%';
+        } else {
+          document.getElementById('approved-bar').style.width = '0%';
+        }
+        // Pending bar
+        if (d.reported_today > 0) {
+          const pendPct = Math.min(((d.pending_review + d.flagged_today) / d.reported_today) * 100, 100);
+          document.getElementById('pending-bar').style.width = pendPct + '%';
+        } else {
+          document.getElementById('pending-bar').style.width = '0%';
+        }
+      } catch (err) {
+        console.warn('Stats load failed:', err);
+        document.getElementById('stats-timestamp').textContent = 'स्टेटस लोड विफल';
+      }
+    }
+
+    // ─── Submissions Table ────────────────────────────────────────
+    async function loadSubmissions() {
+      showTableLoading(true);
+      try {
+        const params = new URLSearchParams({
+          page: currentPage,
+          page_size: 15,
+        });
+        if (currentSearch) params.append('search', currentSearch);
+        if (currentStatus) params.append('status', currentStatus);
+        if (currentDate) params.append('date', currentDate);
+        if (currentBlock) params.append('block_name', currentBlock);
+
+        const res = await authFetch(`${API_BASE}/api/v1/dashboard/submissions?${params}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        totalPages = data.total_pages;
+        renderTable(data.items);
+        renderPagination(data);
+        showTableLoading(false, data.items.length === 0);
+      } catch (err) {
+        console.error('Submissions load failed:', err);
+        showTableLoading(false, false);
+        showToast('डेटा लोड करने में त्रुटि। सर्वर चल रहा है?', 'error');
+      }
+    }
+
+    function renderTable(items) {
+      const tbody = document.getElementById('submissions-tbody');
+      if (!items || items.length === 0) {
+        tbody.innerHTML = '';
+        return;
+      }
+
+      tbody.innerHTML = items.map((s, idx) => {
+        const ts = formatTimestamp(s.submission_timestamp);
+        const statusBadge = makeStatusBadge(s.status);
+        const flagReason = s.flag_reason 
+          ? `<div class="text-[0.65rem] font-bold text-red-700 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded mt-1 whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px] mx-auto" title="${s.flag_reason}">⚠️ ${s.flag_reason}</div>`
+          : '';
+        const gpsPill = s.latitude && s.longitude
+          ? `<span class="gps-pill">📍 ${parseFloat(s.latitude).toFixed(4)}, ${parseFloat(s.longitude).toFixed(4)}</span>`
+          : `<span class="badge gps-none">—</span>`;
+        const aiScore = s.ai_score
+          ? `<span class="badge" style="background:#f3e8ff;color:#6b21a8">${s.ai_score}</span>`
+          : `<span class="text-slate-300 text-xs">N/A</span>`;
+        const mediaIcon = s.has_media
+          ? `<span title="मीडिया प्राप्त">📷</span>`
+          : `<span class="text-slate-300">—</span>`;
+
+        const registered = s.registered_children || 0;
+        const visible = s.visible_children || 0;
+        const difference = (visible > 0) ? (registered - visible) : 0;
+        
+        return `
+          <tr class="animate-fade-in">
+            <td class="text-slate-400 text-xs">${((currentPage-1)*15)+idx+1}</td>
+            <td class="hindi text-slate-800 font-medium">${s.district || '–'}</td>
+            <td class="hindi text-slate-600">${s.block_name || '–'}</td>
+            <td class="hindi text-slate-600">${s.sector || '–'}</td>
+            <td>
+              <div class="hindi font-medium text-slate-800">${s.supervisor_name || '–'}</div>
+            </td>
+            <td>
+              <div class="hindi font-semibold text-gov-700">${s.center_name || '–'}</div>
+              <div class="font-mono text-[10px] text-slate-400">${s.awc_id || '–'}</div>
+              <div class="hindi text-xs text-slate-500">${s.worker_name || '–'}</div>
+            </td>
+            <td class="text-slate-600 text-xs whitespace-nowrap">
+              ${ts} <br/>
+              ${mediaIcon} ${gpsPill}
+            </td>
+            <td class="text-center font-bold text-slate-600">${registered}</td>
+            <td class="text-center font-bold text-purple-700">${s.visible_children !== null ? s.visible_children : '–'}</td>
+            <td class="text-center font-bold ${difference > 10 ? 'text-red-500' : 'text-slate-500'}">${s.visible_children !== null ? difference : '–'}</td>
+            <td class="text-center hindi text-xs ${s.meal_status === 'भोजन उपस्थित' ? 'text-green-600' : (s.meal_status === 'भोजन नहीं' ? 'text-red-600' : 'text-slate-500')} font-semibold">${s.meal_status || '–'}</td>
+            <td class="text-center">
+              ${statusBadge}
+              ${flagReason}
+            </td>
+            <td class="text-center">
+              <button onclick='openReviewModal(${JSON.stringify(s)})'
+                class="btn-primary text-xs py-1.5 px-3 hindi">समीक्षा</button>
+            </td>
+          </tr>`;
+      }).join('');
+    }
+
+    function renderPagination(data) {
+      const bar = document.getElementById('pagination-bar');
+      const info = document.getElementById('pagination-info');
+      const prevBtn = document.getElementById('prev-page');
+      const nextBtn = document.getElementById('next-page');
+      const pageNums = document.getElementById('page-numbers');
+
+      if (data.total === 0) { bar.classList.add('hidden'); return; }
+      bar.classList.remove('hidden');
+
+      const start = (data.page - 1) * data.page_size + 1;
+      const end = Math.min(data.page * data.page_size, data.total);
+      info.textContent = `${start}–${end} / कुल ${data.total} रिकॉर्ड`;
+
+      prevBtn.disabled = data.page <= 1;
+      nextBtn.disabled = data.page >= data.total_pages;
+
+      // Page number pills
+      pageNums.innerHTML = '';
+      const pages = getPaginationRange(data.page, data.total_pages);
+      pages.forEach(p => {
+        if (p === '…') {
+          pageNums.innerHTML += `<span class="px-2 text-slate-400 text-xs self-center">…</span>`;
+        } else {
+          const active = p === data.page;
+          pageNums.innerHTML += `
+            <button onclick="goToPage(${p})"
+              class="w-7 h-7 rounded-lg text-xs font-semibold transition-colors ${active ? 'bg-gov-700 text-white' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'}">
+              ${p}
+            </button>`;
+        }
+      });
+    }
+
+    function getPaginationRange(current, total) {
+      if (total <= 7) return Array.from({length: total}, (_, i) => i+1);
+      const pages = [1];
+      if (current > 3) pages.push('…');
+      for (let p = Math.max(2, current-1); p <= Math.min(total-1, current+1); p++) pages.push(p);
+      if (current < total - 2) pages.push('…');
+      pages.push(total);
+      return pages;
+    }
+
+    // ─── Review Modal ─────────────────────────────────────────────
+    function openReviewModal(submission) {
+      currentSubmission = submission;
+
+      document.getElementById('modal-submission-id').textContent = `ID: ${submission.submission_id}`;
+      document.getElementById('modal-awc-id').textContent = submission.awc_id || '–';
+      document.getElementById('modal-center').textContent = submission.center_name || '–';
+      document.getElementById('modal-block').textContent = submission.block_name || '–';
+      document.getElementById('modal-worker').textContent = (submission.worker_name || '–') + ' · ' + submission.worker_phone;
+      document.getElementById('modal-time').textContent = formatTimestamp(submission.submission_timestamp);
+      document.getElementById('modal-status-badge').innerHTML = makeStatusBadge(submission.status);
+
+      // GPS
+      if (submission.latitude && submission.longitude) {
+        document.getElementById('modal-gps-section').classList.remove('hidden');
+        document.getElementById('modal-lat').textContent = parseFloat(submission.latitude).toFixed(6);
+        document.getElementById('modal-lon').textContent = parseFloat(submission.longitude).toFixed(6);
+        document.getElementById('modal-maps-link').href =
+          `https://www.google.com/maps?q=${submission.latitude},${submission.longitude}`;
+      } else {
+        document.getElementById('modal-gps-section').classList.add('hidden');
+      }
+
+      // Media
+      document.getElementById('modal-media-desc').textContent =
+        submission.has_media ? `मीडिया ID: ${submission.raw_media_id || 'उपलब्ध'}` : 'कोई मीडिया नहीं';
+
+      // AI Score
+      if (submission.ai_score) {
+        const score = parseInt(submission.ai_score);
+        document.getElementById('modal-ai-bar').style.width = score + '%';
+        document.getElementById('modal-ai-score').textContent = score + '%';
+      } else {
+        document.getElementById('modal-ai-bar').style.width = '0%';
+        document.getElementById('modal-ai-score').textContent = 'N/A';
+      }
+
+      // Already reviewed?
+      const isReviewed = submission.review_action !== null;
+      document.getElementById('review-form-section').classList.toggle('hidden', isReviewed);
+      document.getElementById('already-reviewed-notice').classList.toggle('hidden', !isReviewed);
+      if (isReviewed) {
+        document.getElementById('already-reviewed-text').textContent =
+          `यह रिपोर्ट ${submission.reviewer_name || 'अधिकारी'} द्वारा "${submission.review_action}" के रूप में चिह्नित की गई है।`;
+      }
+
+      // Reset flag form
+      document.getElementById('flag-reason-section').classList.add('hidden');
+      document.getElementById('btn-flag-modal').classList.remove('hidden');
+      document.getElementById('btn-confirm-flag').classList.add('hidden');
+      document.getElementById('reviewer-remarks').value = '';
+      document.getElementById('flag-reason-select').value = '';
+
+      // Show modal
+      document.getElementById('review-modal').classList.remove('hidden');
+    }
+
+    function showFlagForm() {
+      document.getElementById('flag-reason-section').classList.remove('hidden');
+      document.getElementById('btn-flag-modal').classList.add('hidden');
+      document.getElementById('btn-confirm-flag').classList.remove('hidden');
+    }
+
+    function closeModal(event) {
+      if (event.target === document.getElementById('review-modal')) {
+        document.getElementById('review-modal').classList.add('hidden');
+      }
+    }
+
+    async function submitReview(action) {
+      if (!currentSubmission) return;
+
+      const flagReason = document.getElementById('flag-reason-select').value;
+      const remarks = document.getElementById('reviewer-remarks').value;
+
+      if (action === 'FLAGGED' && !flagReason) {
+        showToast('फ्लैग करने के लिए कारण चुनना आवश्यक है।', 'error');
+        return;
+      }
+
+      const payload = {
+        action,
+        flag_reason: flagReason || null,
+        remarks: remarks || null,
+        reviewer_id: 'district_officer_shahdol',
+        reviewer_name: 'जिला अधिकारी शहडोल',
+      };
+
+      try {
+        const res = await authFetch(`${API_BASE}/api/v1/dashboard/submissions/${currentSubmission.submission_id}/review`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          showToast(data.detail || 'समीक्षा सहेजने में त्रुटि।', 'error');
+          return;
+        }
+
+        document.getElementById('review-modal').classList.add('hidden');
+        showToast(data.message, 'success');
+        await loadDashboard();
+      } catch (err) {
+        console.error('Review submit failed:', err);
+        showToast('नेटवर्क त्रुटि। पुनः प्रयास करें।', 'error');
+      }
+    }
+
+    // ─── Filters & Search ─────────────────────────────────────────
+    function applyFilters() {
+      currentStatus = document.getElementById('filter-status').value;
+      currentDate = document.getElementById('filter-date').value;
+      currentBlock = document.getElementById('filter-block').value;
+      currentPage = 1;
+      loadDashboard();
+    }
+
+    function debounceSearch() {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        currentSearch = document.getElementById('search-input').value;
+        currentPage = 1;
+        loadSubmissions();
+      }, 400);
+    }
+
+    function changePage(delta) {
+      const newPage = currentPage + delta;
+      if (newPage >= 1 && newPage <= totalPages) goToPage(newPage);
+    }
+
+    function goToPage(page) {
+      currentPage = page;
+      loadSubmissions();
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────
+    function showTableLoading(loading, empty = false) {
+      document.getElementById('table-loading').classList.toggle('hidden', !loading);
+      document.getElementById('table-loading').style.display = loading ? 'flex' : 'none';
+      document.getElementById('table-empty').style.display = (!loading && empty) ? 'flex' : 'none';
+      document.getElementById('table-wrapper').classList.toggle('hidden', loading || empty);
+    }
+
+    function makeStatusBadge(status) {
+      const map = {
+        'RECEIVED':  ['badge-received',  '● प्राप्त'],
+        'APPROVED':  ['badge-approved',  '✓ सत्यापित'],
+        'FLAGGED':   ['badge-flagged',   '⚑ फ्लैग्ड'],
+        'REJECTED':  ['badge-rejected',  '✕ अस्वीकृत'],
+        'PROCESSED': ['badge-processed', '⊙ प्रोसेस्ड'],
+      };
+      const [cls, label] = map[status] || ['badge-received', status];
+      return `<span class="badge ${cls} hindi">${label}</span>`;
+    }
+
+    function formatTimestamp(iso) {
+      if (!iso) return '–';
+      const d = new Date(iso);
+      return d.toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit', month: '2-digit', year: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: true,
+      });
+    }
+
+    function animateNumber(id, target) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const start = parseInt(el.textContent.replace(/,/g, '')) || 0;
+      const duration = 600;
+      const startTime = performance.now();
+      function update(now) {
+        const progress = Math.min((now - startTime) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const value = Math.round(start + (target - start) * eased);
+        el.textContent = value.toLocaleString('en-IN');
+        if (progress < 1) requestAnimationFrame(update);
+      }
+      requestAnimationFrame(update);
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+      toast.className = `toast toast-${type} hindi`;
+      toast.innerHTML = `<span>${icons[type]}</span><span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.4s';
+        setTimeout(() => toast.remove(), 400);
+      }, 3500);
+    }
+
+    async function downloadReport(format) {
+      const params = new URLSearchParams();
+      if (currentDate) params.append('date', currentDate);
+      if (currentBlock) params.append('block_name', currentBlock);
+      if (currentStatus) params.append('status', currentStatus);
+
+      const endpoint = format === 'pdf' ? '/api/v1/reports/pdf' : '/api/v1/reports/excel';
+      const url = `${API_BASE}${endpoint}?${params.toString()}`;
+
+      showToast(`${format.toUpperCase()} डाउनलोड हो रहा है…`, 'info');
+      try {
+        const res = await authFetch(url);
+        if (!res.ok) {
+          showToast('अनधिकृत या डाउनलोड त्रुटि', 'error');
+          return;
+        }
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `Shahdol_AWC_Report.${format === 'pdf' ? 'pdf' : 'csv'}`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(a.href);
+        a.remove();
+      } catch (err) {
+        console.error('Report download failed:', err);
+        showToast('नेटवर्क त्रुटि। पुनः प्रयास करें।', 'error');
+      }
+    }
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') document.getElementById('review-modal').classList.add('hidden');
+    });
+  </script>
+
+</body>
+</html>

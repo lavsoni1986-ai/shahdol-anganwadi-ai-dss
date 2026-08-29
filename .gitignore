@@ -1,0 +1,43 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+data/*.db
+data/*.sqlite
+data/uploads/
+app/static/
+static/
+*.png
+*.pdf
+.vscode/
+.idea/
+vc_redist.x64.exe
+check_db.py
+inspect_schema.py
+scratch/
+
+# Model Binary Weights
+*.pt
+*.pth
+
+# Benchmark Real Dataset Artifacts (Child Privacy & Blind GT Isolation)
+benchmark/real_dataset/images/
+benchmark/real_dataset/ground_truth.xlsx
+benchmark/real_dataset/ground_truth.json
+
+# Firebase / Google Cloud service-account & credential JSON (never commit)
+*service-account*.json
+*firebase-adminsdk*.json
+*credentials*.json
+
+# Local dev leftovers (not part of Ideathon baseline)
+test_gemini.py
+test_migration.py
+

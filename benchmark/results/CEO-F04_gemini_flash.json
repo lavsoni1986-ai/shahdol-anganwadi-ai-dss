@@ -1,0 +1,18 @@
+{
+  "benchmark_version": "1.0.0",
+  "engine": "gemini_flash",
+  "model": "google/gemini-2.5-flash",
+  "image_id": "CEO-F04",
+  "image_sha256": "01ef0a5afa6b0efa1fa6fd428bc6289889f6a5533d2785389bc2f2dc691d0800",
+  "prompt_version": "child_count_v1",
+  "prompt_sha256": "c39a846c9fcbfb67b469dbcd170fbd0866f7f0c42ab265a3b9e08ef71c01d541",
+  "run_id": "20260804T194611Z",
+  "first_run": true,
+  "prediction": 21,
+  "latency": 8.2766,
+  "cost": null,
+  "confidence": null,
+  "notes": "Tokens: P=1995, C=9, T=2004",
+  "raw_response": "{\"child_count\": 21}",
+  "timestamp": "2026-08-04T19:46:11.928459+00:00"
+}

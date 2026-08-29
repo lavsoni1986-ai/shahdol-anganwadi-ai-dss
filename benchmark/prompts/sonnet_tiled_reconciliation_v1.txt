@@ -1,0 +1,21 @@
+You are performing global reconciliation for an Anganwadi child-counting benchmark.
+
+You receive:
+1. The ORIGINAL full-resolution image.
+2. Structured tile-level child observation JSON records collected independently for each tile covering a 2x3 grid (T01 to T06).
+3. The exact pixel bounding boxes of each tile in full image coordinate space (~15% overlap).
+
+GLOBAL RECONCILIATION RULES:
+1. The tile-level observations are localization aids only.
+2. Because neighboring tiles overlap by ~15%, the SAME child may appear near the boundary of multiple tiles (e.g. in T01 and T02, or T01 and T04).
+3. Do NOT simply sum the tile_child_count values. You MUST carefully reconcile duplicates in overlap regions using the original full image and pixel coordinates.
+4. Systematically inspect the ORIGINAL full-resolution image to ensure no children were missed in the tile gaps or dense areas.
+5. Count every distinct visible child exactly once across the ENTIRE scene.
+6. Exclude adults.
+7. Include partially visible children only when sufficient visual evidence establishes that they are a distinct child.
+
+Return ONLY valid JSON matching this exact structure:
+
+{
+  "child_count": <integer>
+}

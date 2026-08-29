@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <title>Anganwadi Verification Report</title>
+    <style>
+        @font-face {
+            font-family: 'NotoSansDevanagari';
+            src: url('{{ font_regular }}') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: 'NotoSansDevanagari';
+            src: url('{{ font_bold }}') format('truetype');
+            font-weight: bold;
+            font-style: normal;
+        }
+        
+        :root {
+            --gov-navy: #0f2942;
+            --gov-blue: #1e3a8a;
+            --bg-light: #f8fafc;
+            --text-dark: #0f172a;
+            --text-muted: #475569;
+            --border-grey: #e2e8f0;
+            --color-pass: #15803d;
+            --color-review: #b45309;
+            --color-fail: #b91c1c;
+        }
+
+        @page {
+            size: A4;
+            margin: 15mm;
+        }
+
+        body {
+            font-family: 'NotoSansDevanagari', sans-serif;
+            margin: 0;
+            padding: 0;
+            color: var(--text-dark);
+            background: white;
+            font-size: 11pt;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+
+        .page {
+            width: 100%;
+            height: 260mm; /* A4 height approx minus margins */
+            page-break-after: always;
+            position: relative;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .page:last-child {
+            page-break-after: auto;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px solid var(--border-grey);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            color: var(--gov-navy);
+            font-size: 18pt;
+            margin: 0;
+            padding: 0;
+        }
+
+        .header h2 {
+            color: var(--gov-blue);
+            font-size: 14pt;
+            margin: 5px 0 0 0;
+            font-weight: normal;
+        }
+
+        .tracking-id {
+            position: absolute;
+            top: 0;
+            right: 0;
+            font-size: 9pt;
+            color: var(--text-muted);
+        }
+
+        .status-banner {
+            background: {{ status_color }};
+            color: white;
+            text-align: center;
+            padding: 10px;
+            font-size: 14pt;
+            font-weight: bold;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .status-reason {
+            text-align: center;
+            font-size: 11pt;
+            color: var(--text-muted);
+            margin-top: -15px;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            background: var(--bg-light);
+            padding: 8px 12px;
+            font-weight: bold;
+            font-size: 12pt;
+            border-left: 4px solid var(--gov-blue);
+            margin-bottom: 15px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        th, td {
+            border: 1px solid var(--border-grey);
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        th {
+            background-color: var(--bg-light);
+            font-weight: bold;
+            color: var(--text-muted);
+        }
+
+        .center-text {
+            text-align: center;
+        }
+
+        .badge-PASS { color: var(--color-pass); font-weight: bold; }
+        .badge-REVIEW { color: var(--color-review); font-weight: bold; }
+        .badge-FAIL { color: var(--color-fail); font-weight: bold; }
+        .badge-N-A { color: var(--text-muted); font-weight: bold; }
+
+        .image-container {
+            text-align: center;
+            margin-bottom: 20px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .evidence-img {
+            max-width: 100%;
+            max-height: 100mm;
+            object-fit: contain;
+            border: 1px solid var(--border-grey);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .img-caption {
+            margin-top: 8px;
+            font-weight: bold;
+            color: var(--text-muted);
+            font-size: 10pt;
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            border-top: 1px solid var(--border-grey);
+            padding-top: 10px;
+            font-size: 8pt;
+            color: var(--text-muted);
+            text-align: center;
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- PAGE 1: Executive Summary -->
+    <div class="page">
+        <div class="tracking-id">Audit ID: {{ audit_id | e }}</div>
+        
+        <div class="header">
+            <h1>महिला एवं बाल विकास विभाग</h1>
+            <h2>जिला शहडोल (म.प्र.)</h2>
+            <div style="margin-top: 5px; color: var(--text-muted);">आंगनवाड़ी डिजिटल सत्यापन प्रतिवेदन</div>
+        </div>
+
+        <div class="status-banner">
+            {{ status_text | e }}
+        </div>
+        {% if flag_reason %}
+        <div class="status-reason">
+            कारण: {{ flag_reason | e }}
+        </div>
+        {% endif %}
+
+        <div class="section-title">केंद्र विवरण</div>
+        <table>
+            <tr>
+                <th>केंद्र:</th><td>{{ center_name | e }}</td>
+                <th>AWC ID:</th><td>{{ awc_id | e }}</td>
+            </tr>
+            <tr>
+                <th>ब्लॉक:</th><td>{{ block_name | e }}</td>
+                <th>कार्यकर्ता:</th><td>{{ worker_name | e }}</td>
+            </tr>
+            <tr>
+                <th>मोबाइल:</th><td>{{ worker_phone | e }}</td>
+                <th>दिनांक/समय:</th><td>{{ date_time | e }}</td>
+            </tr>
+        </table>
+
+        <div class="section-title">कार्यकारी सारांश</div>
+        <table>
+            <tr>
+                <th>AI द्वारा उपस्थित बच्चे:</th>
+                <td>{{ children_count | e }}</td>
+            </tr>
+            <tr>
+                <th>कार्यकर्ता उपस्थित:</th>
+                <td>{{ worker_present | e }}</td>
+            </tr>
+            <tr>
+                <th>भोजन वितरण दृश्य:</th>
+                <td>{{ meal_detected | e }}</td>
+            </tr>
+            <tr>
+                <th>Live GPS सत्यापन:</th>
+                <td>{{ is_gps_ok | e }}</td>
+            </tr>
+            <tr>
+                <th>Timestamp (IST):</th>
+                <td>{{ date_time | e }}</td>
+            </tr>
+            <tr>
+                <th>Duplicate Image:</th>
+                <td>{{ is_duplicate | e }}</td>
+            </tr>
+            <tr>
+                <th>AI निर्णय:</th>
+                <td style="font-weight: bold; color: {{ status_color }}">{{ status_decision | e }}</td>
+            </tr>
+        </table>
+
+        <div class="footer">
+            <span>यह प्रतिवेदन BharatOS AI द्वारा स्वतः तैयार किया गया है।</span>
+            <span>Page 1 / 3</span>
+        </div>
+    </div>
+
+    <!-- PAGE 2: Scorecard -->
+    <div class="page">
+        <div class="tracking-id">Audit ID: {{ audit_id | e }}</div>
+        <div class="header" style="border-bottom: none; margin-bottom: 10px; padding-bottom: 0;">
+            <h2>सत्यापन विवरण</h2>
+        </div>
+
+        <div class="section-title">सत्यापन स्कोरकार्ड</div>
+        <table>
+            <tr>
+                <th style="width: 40%">पैरामीटर</th>
+                <th style="width: 20%" class="center-text">स्थिति</th>
+                <th style="width: 40%">विवरण</th>
+            </tr>
+            {% for row in scorecard %}
+            <tr>
+                <td>{{ row.param | e }}</td>
+                <td class="center-text badge-{{ row.status }}">{{ row.status | e }}</td>
+                <td>{{ row.detail | e }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+
+        <div class="section-title">उपस्थिति सारांश</div>
+        <table>
+            <tr>
+                <th>पंजीकृत बच्चे</th>
+                <td class="center-text">{{ registered_children | e }}</td>
+            </tr>
+            <tr>
+                <th>AI द्वारा पाए गए</th>
+                <td class="center-text">{{ children_count | e }}</td>
+            </tr>
+            <tr>
+                <th>अंतर</th>
+                <td class="center-text">{{ difference | e }}</td>
+            </tr>
+        </table>
+
+        <div class="section-title">AI Observation</div>
+        <p style="padding: 0 10px; line-height: 1.5;">{{ ai_remarks | e }}</p>
+
+        <div class="footer">
+            <span>यह प्रतिवेदन BharatOS AI द्वारा स्वतः तैयार किया गया है।</span>
+            <span>Page 2 / 3</span>
+        </div>
+    </div>
+
+    <!-- PAGE 3: Photographic Evidence -->
+    <div class="page">
+        <div class="tracking-id">Audit ID: {{ audit_id | e }}</div>
+        <div class="header" style="border-bottom: none; margin-bottom: 10px; padding-bottom: 0;">
+            <h2>सत्यापन छवियाँ</h2>
+        </div>
+
+        <div class="image-container">
+            <img class="evidence-img" src="{{ orig_img_base64 }}" alt="Original Image" />
+            <div class="img-caption">मूल प्राप्त फोटो</div>
+        </div>
+
+        <div class="image-container">
+            <img class="evidence-img" src="{{ yolo_img_base64 }}" alt="YOLO Image" />
+            <div class="img-caption">AI Object Detection — AI द्वारा पहचाने गए बच्चे: {{ children_count | e }}</div>
+        </div>
+
+        <div class="footer">
+            <span>यह प्रतिवेदन BharatOS AI द्वारा स्वतः तैयार किया गया है।</span>
+            <span>Page 3 / 3</span>
+        </div>
+    </div>
+
+</body>
+</html>

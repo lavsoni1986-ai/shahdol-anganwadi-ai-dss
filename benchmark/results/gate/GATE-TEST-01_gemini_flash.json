@@ -1,0 +1,16 @@
+{
+  "image_id": "GATE-TEST-01",
+  "image_sha256": "4e8d65fad994ab010a34da5a08c5ac575b61ce5d651db1c254e5edd69cd294c5",
+  "engine": "gemini_flash",
+  "model": "google/gemini-2.5-flash",
+  "gate_prompt_version": "anganwadi_gate_v1",
+  "prompt_sha256": "27e5d48cd1b469baae609d84ba6bc152fad80bcbc539e994315d59c7ce9e54a9",
+  "valid_anganwadi_image": false,
+  "child_count": null,
+  "reason": "The image displays a modern building labeled 'Bharatos AI Academy' and lacks any visual elements typically associated with an Anganwadi center, children, or related activities.",
+  "final_decision": "REJECT_IMAGE",
+  "latency": 58.6261,
+  "cost": null,
+  "raw_response": "```json\n{\n  \"valid_anganwadi_image\": false,\n  \"child_count\": null,\n  \"reason\": \"The image displays a modern building labeled 'Bharatos AI Academy' and lacks any visual elements typically associated with an Anganwadi center, children, or related activities.\"\n}\n```",
+  "timestamp": "2026-08-04T21:19:00.094637+00:00"
+}

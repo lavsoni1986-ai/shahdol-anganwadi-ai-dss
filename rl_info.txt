@@ -1,0 +1,2 @@
+reportlab version: 4.2.2
+uharfbuzz version: 0.55.0

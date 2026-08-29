@@ -1,0 +1,201 @@
+{
+  "dataset_name": "Shahdol Anganwadi Real Image Benchmark",
+  "dataset_version": "1.0.0",
+  "frozen": true,
+  "created_at": "2026-08-05T15:50:37.485745+00:00",
+  "image_count": 21,
+  "ground_truth_record_count": 21,
+  "ground_truth_file": "ground_truth.xlsx",
+  "ground_truth_sha256": "aa8ad1616e69e97ce0f060a30515ed74253aceb601e5e3507940998be79277ce",
+  "images": [
+    {
+      "image_id": "AWC-001",
+      "filename": "AWC-001.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 166488,
+      "width": 1600,
+      "height": 1200,
+      "sha256": "01ef0a5afa6b0efa1fa6fd428bc6289889f6a5533d2785389bc2f2dc691d0800"
+    },
+    {
+      "image_id": "AWC-002",
+      "filename": "AWC-002.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 200629,
+      "width": 1280,
+      "height": 960,
+      "sha256": "14f5006e071c7e4a9e6aec39fb6c5a88503fad4b9b74b4008f89cd3656f99ffc"
+    },
+    {
+      "image_id": "AWC-003",
+      "filename": "AWC-003.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 114766,
+      "width": 1280,
+      "height": 576,
+      "sha256": "91e694d50e4b7cfd324d4b573340d232cbfd9d17ff59db2e207d17b4cbbf1db1"
+    },
+    {
+      "image_id": "AWC-004",
+      "filename": "AWC-004.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 121091,
+      "width": 1600,
+      "height": 818,
+      "sha256": "2862e01a880e0527466fc4c2ac1e611801b68ee6f6148823e3a7827e13234319"
+    },
+    {
+      "image_id": "AWC-005",
+      "filename": "AWC-005.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 140033,
+      "width": 1600,
+      "height": 818,
+      "sha256": "66c2462e1cb1488c7b5d76b1f7a97b81e4552ff852c879ea5c7a3723ceb53bc0"
+    },
+    {
+      "image_id": "AWC-006",
+      "filename": "AWC-006.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 125901,
+      "width": 1600,
+      "height": 818,
+      "sha256": "d3f9d62201186f2e2e56d32a2f4f694106e64951e80c189977de918f1a015500"
+    },
+    {
+      "image_id": "AWC-007",
+      "filename": "AWC-007.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 97653,
+      "width": 1600,
+      "height": 818,
+      "sha256": "1ebe3f38b02bf5abe9619365e94576d67da41f3c9b796d9fc51053e12173ac47"
+    },
+    {
+      "image_id": "AWC-008",
+      "filename": "AWC-008.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 109782,
+      "width": 671,
+      "height": 1600,
+      "sha256": "ce511bef80a186d4ed594d1e00e1d2ee7b7d345b832928a53e034a58c23c8532"
+    },
+    {
+      "image_id": "AWC-009",
+      "filename": "AWC-009.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 142783,
+      "width": 1600,
+      "height": 818,
+      "sha256": "be73e2fae9ea8f03a2c4a0d7fccc2e1fe2908bea3cf44131b960c0f084f8912e"
+    },
+    {
+      "image_id": "AWC-010",
+      "filename": "AWC-010.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 100053,
+      "width": 1600,
+      "height": 818,
+      "sha256": "daffb95cb249e719bb86d821d65c3673fa71bc955de32595ead8a3f75e0b40ea"
+    },
+    {
+      "image_id": "AWC-011",
+      "filename": "AWC-011.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 126573,
+      "width": 1600,
+      "height": 818,
+      "sha256": "7affaab3f7f6aae9aa091cee1da728086d352ab90cfeae41af05cd1ab6b6d788"
+    },
+    {
+      "image_id": "AWC-012",
+      "filename": "AWC-012.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 99989,
+      "width": 1600,
+      "height": 818,
+      "sha256": "cc2dfe1103c5b3ead385e404913955b8d491f55616e54f4f4f534a84c12b0f90"
+    },
+    {
+      "image_id": "AWC-013",
+      "filename": "AWC-013.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 144804,
+      "width": 1600,
+      "height": 818,
+      "sha256": "1c39d32b857c5d52b4d426b5ae567dc389b31873348bb615a29a2a758b806159"
+    },
+    {
+      "image_id": "AWC-014",
+      "filename": "AWC-014.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 150683,
+      "width": 1600,
+      "height": 818,
+      "sha256": "7dd38fda5885c41d2a2ff564aa8f90c4f36364039177ff2f5964d99514cc1c08"
+    },
+    {
+      "image_id": "AWC-015",
+      "filename": "AWC-015.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 143728,
+      "width": 1600,
+      "height": 818,
+      "sha256": "c3562b9d16fa8abe1b60e88e4b5a48c4b54979f838b347329a2ce79cba5fe0b5"
+    },
+    {
+      "image_id": "AWC-016",
+      "filename": "AWC-016.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 110572,
+      "width": 1600,
+      "height": 818,
+      "sha256": "b13982708af833199890ac6887f750f11c76787d7d574eef147f16f8adec6d4e"
+    },
+    {
+      "image_id": "AWC-017",
+      "filename": "AWC-017.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 168534,
+      "width": 1600,
+      "height": 818,
+      "sha256": "2000a7e390fab392c6753f469590a1b201956b370db5d87a9eb4a3457183cbc6"
+    },
+    {
+      "image_id": "AWC-018",
+      "filename": "AWC-018.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 127015,
+      "width": 1600,
+      "height": 818,
+      "sha256": "870c6f1c062641616be6fc9d7a6ca2148e1a0493899eca90cbe6081f2e648a2f"
+    },
+    {
+      "image_id": "AWC-019",
+      "filename": "AWC-019.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 142269,
+      "width": 1600,
+      "height": 818,
+      "sha256": "69254031c28346c74abc74698fc90112edefa8a7afd9f32be6c01b55282b42da"
+    },
+    {
+      "image_id": "AWC-020",
+      "filename": "AWC-020.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 126577,
+      "width": 1600,
+      "height": 818,
+      "sha256": "4494e4d7cfc80f8c92ed42e0a326164fefe417c47183988f16a66ab030e96e1d"
+    },
+    {
+      "image_id": "AWC-021",
+      "filename": "AWC-021.jpeg",
+      "extension": ".jpeg",
+      "file_size_bytes": 123543,
+      "width": 1600,
+      "height": 818,
+      "sha256": "4635fb76afa88c22218d909275f66c2b713fcf8c3db946433bab2d0f11c6fcf4"
+    }
+  ]
+}
