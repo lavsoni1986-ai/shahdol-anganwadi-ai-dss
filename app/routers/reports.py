@@ -16,13 +16,15 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, or_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
 from app.models import DailySubmission, SubmissionStatus
+from app.services.firebase_auth import get_current_officer, require_admin
 from app.services.pdf_generator import generate_daily_report_pdf
+from app.services.storage import get_storage_service, sanitize_identifier, validate_object_key
 from app.services.whatsapp import send_whatsapp_document
 from app.utils.logger import get_logger
 
@@ -153,6 +155,7 @@ async def _compute_stats(db: AsyncSession, rows: list, date_str: Optional[str]) 
 )
 async def download_pdf_report(
     db: AsyncSession = Depends(get_db),
+    officer: dict = Depends(get_current_officer),
     report_date: Optional[str] = Query(
         None,
         alias="date",
@@ -254,6 +257,7 @@ async def download_pdf_report(
 )
 async def download_excel_report(
     db: AsyncSession = Depends(get_db),
+    officer: dict = Depends(get_current_officer),
     report_date: Optional[str] = Query(
         None,
         alias="date",
@@ -406,6 +410,7 @@ async def send_whatsapp_pdf_report(
     to_phone: str = Query(..., description="Recipient phone number with country code, e.g. 919753239303"),
     report_date: Optional[str] = Query(None, alias="date", description="Report date YYYY-MM-DD. Defaults to today."),
     db: AsyncSession = Depends(get_db),
+    officer: dict = Depends(require_admin),
 ):
     """
     Generates and dispatches PDF report to a WhatsApp phone number.
@@ -435,6 +440,7 @@ async def send_whatsapp_pdf_report(
         document_url=pdf_url,
         filename=filename,
         caption=f"📄 *शहडोल जिला — दैनिक आंगनवाड़ी पोषण आहार रिपोर्ट*\n📅 दिनांक: {display_date}\n📊 कुल केंद्र: {stats['total_awc_centres']} | रिपोर्ट प्राप्त: {len(submissions)}",
+        file_bytes=pdf_bytes,
     )
 
     return {
@@ -444,4 +450,121 @@ async def send_whatsapp_pdf_report(
         "filename": filename,
         "whatsapp_response": res,
     }
+
+
+# ═════════════════════════════════════════════════════════════════════
+# ENDPOINT 4 — Authenticated Submission Verification PDF
+# GET /api/v1/reports/submissions/{submission_id}/pdf
+# ═════════════════════════════════════════════════════════════════════
+
+@router.get(
+    "/submissions/{submission_id}/pdf",
+    summary="Download Individual Submission Verification Report (Authenticated)",
+    description=(
+        "Streams the official verification report PDF for a specific submission. "
+        "Requires Firebase Authentication. Validates officer authorization, "
+        "sanitizes identifiers to prevent traversal, and streams the PDF securely."
+    ),
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {"application/pdf": {}},
+            "description": "PDF file stream",
+        },
+        400: {"description": "Invalid submission identifier or path traversal attempt"},
+        401: {"description": "Unauthenticated request"},
+        403: {"description": "Forbidden - unauthorized submission"},
+        404: {"description": "Submission or report not found"},
+    },
+)
+async def download_submission_pdf_report(
+    submission_id: str,
+    db: AsyncSession = Depends(get_db),
+    officer: dict = Depends(get_current_officer),
+    inline: bool = Query(True, description="If true, displays inline in browser; if false, attachment."),
+):
+    from pathlib import Path
+
+    # 1. Sanitize input to reject traversal or control characters
+    try:
+        clean_id = sanitize_identifier(submission_id)
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid submission identifier: {str(val_err)}",
+        )
+
+    # 2. Database lookup
+    conditions = [
+        DailySubmission.submission_id == clean_id,
+        DailySubmission.audit_id == clean_id,
+    ]
+    if clean_id.isdigit():
+        conditions.append(DailySubmission.id == int(clean_id))
+
+    query = select(DailySubmission).where(or_(*conditions))
+    result = await db.execute(query)
+    submission = result.scalars().first()
+
+    if not submission:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Submission '{clean_id}' not found.",
+        )
+
+    # 3. Authorization check
+    if not submission.is_authorized:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access to unauthorized submission report is forbidden.",
+        )
+
+    # 4. Resolve PDF storage key
+    pdf_key = submission.pdf_path
+    if not pdf_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Report PDF has not been generated for submission '{clean_id}'.",
+        )
+
+    # 5. Prevent arbitrary or invalid keys
+    try:
+        if not (Path(pdf_key).is_absolute() or Path(pdf_key).exists()):
+            validate_object_key(pdf_key)
+    except ValueError as key_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid report key: {str(key_err)}",
+        )
+
+    # 6. Retrieve PDF bytes via storage service
+    storage = get_storage_service()
+    try:
+        pdf_bytes = await storage.download_file(pdf_key)
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report file could not be found in storage.",
+        )
+    except Exception as e:
+        logger.error("submission_pdf_fetch_failed", key=pdf_key, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve report from storage.",
+        )
+
+    audit_label = submission.audit_id or submission.submission_id[:8]
+    filename = f"AWC_Report_{audit_label}.pdf"
+    disposition = f'inline; filename="{filename}"' if inline else f'attachment; filename="{filename}"'
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": disposition,
+            "Content-Length": str(len(pdf_bytes)),
+            "X-Audit-ID": submission.audit_id or "",
+            "X-AWC-ID": submission.awc_id or "",
+        },
+    )
 

@@ -1,0 +1,52 @@
+# .dockerignore — Shahdol Anganwadi AI DSS
+
+# Git
+.git
+.git/**/*
+
+# Python virtual environments
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment / secrets (never bake)
+.env
+.env.*
+!.env.example
+
+# Local databases
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+
+# Runtime uploads / processed data
+data/uploads/
+data/processed/
+
+# Generated PDF reports (runtime outputs, not baked)
+app/static/reports/
+
+# Tests
+tests/
+.pytest_cache/
+
+# Benchmark / scratch
+benchmark/
+scratch/
+
+# IDE files
+.vscode/
+.idea/
+
+# Firebase / GCP credential JSON (never bake)
+*service-account*.json
+*firebase-adminsdk*.json
+*credentials*.json
+
+# Local dev artifacts
+test_gemini.py
+test_migration.py

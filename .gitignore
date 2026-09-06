@@ -12,8 +12,14 @@ __pycache__/
 data/*.db
 data/*.sqlite
 data/uploads/
-app/static/
-static/
+app/static/*
+# Required runtime static assets (tracked): Devanagari fonts + logo
+!app/static/fonts/
+!app/static/images/
+# Generated PDF reports stay ignored
+app/static/reports/
+!app/static/reports/.gitkeep
+/static/
 *.png
 *.pdf
 .vscode/
@@ -32,3 +38,11 @@ benchmark/real_dataset/images/
 benchmark/real_dataset/ground_truth.xlsx
 benchmark/real_dataset/ground_truth.json
 
+# Firebase / Google Cloud service-account & credential JSON (never commit)
+*service-account*.json
+*firebase-adminsdk*.json
+*credentials*.json
+
+
+# Runtime evidence - never commit
+/data/evidence/

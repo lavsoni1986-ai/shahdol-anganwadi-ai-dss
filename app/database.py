@@ -33,6 +33,23 @@ class Base(DeclarativeBase):
 
 
 # ─────────────────────────────────────────────
+# Database Type Helper
+# ─────────────────────────────────────────────
+def _database_type(db_url: str) -> str:
+    """Returns 'sqlite', 'postgresql', or 'unknown' — never the raw URL."""
+    if "sqlite" in db_url:
+        return "sqlite"
+    if "postgresql" in db_url:
+        return "postgresql"
+    return "unknown"
+
+
+def _should_auto_migrate(db_url: str) -> bool:
+    """Ad-hoc ALTER-based auto migration is SQLite/MVP-only."""
+    return "sqlite" in db_url
+
+
+# ─────────────────────────────────────────────
 # Async Engine Configuration
 # ─────────────────────────────────────────────
 def _build_engine() -> AsyncEngine:
@@ -57,6 +74,14 @@ def _build_engine() -> AsyncEngine:
     # SQLite-specific: enable WAL mode for better concurrency
     if "sqlite" in db_url:
         engine_kwargs["connect_args"] = {"check_same_thread": False}
+
+    # PostgreSQL-specific: pre-ping + bounded pool for Cloud Run.
+    # Never applied to SQLite.
+    if "postgresql" in db_url:
+        engine_kwargs["pool_pre_ping"] = True
+        engine_kwargs["pool_size"] = settings.db_pool_size
+        engine_kwargs["max_overflow"] = settings.db_max_overflow
+        engine_kwargs["pool_recycle"] = 1800
 
     engine = create_async_engine(db_url, **engine_kwargs)
 
@@ -158,7 +183,9 @@ async def init_db() -> None:
             await conn.run_sync(Base.metadata.create_all)
         except OperationalError:
             pass
-        await conn.run_sync(_sync_schema_columns)
+        # SQLite-only auto-migration; PostgreSQL uses versioned migrations (not ad-hoc ALTER)
+        if _should_auto_migrate(settings.database_url):
+            await conn.run_sync(_sync_schema_columns)
 
     logger.info(
         "database_initialized",
@@ -229,21 +256,21 @@ async def init_db() -> None:
 async def check_db_health() -> dict:
     """
     Performs a lightweight database health check.
-    Returns a dict with status and database URL (sanitized).
-
-    Returns:
-        dict: {"status": "healthy"|"unhealthy", "detail": str}
+    Returns a dict with status and safe database type — never the raw connection string.
     """
     try:
         async with AsyncSessionLocal() as session:
             await session.execute(text("SELECT 1"))
-        return {
-            "status": "healthy",
-            "database": settings.database_url.split("///")[-1],
-        }
+        db_type = _database_type(settings.database_url)
+        info: dict = {"status": "healthy", "database": db_type}
+        if db_type == "sqlite":
+            # Safe: expose only the file path for local SQLite (existing behavior)
+            info["path"] = settings.database_url.split("///")[-1]
+        return info
     except Exception as e:
         logger.error("database_health_check_failed", error=str(e))
         return {
             "status": "unhealthy",
+            "database": _database_type(settings.database_url),
             "detail": str(e),
         }

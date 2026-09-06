@@ -53,6 +53,115 @@
     }
   </script>
 
+  <!-- Firebase Auth (Web SDK — compat build for vanilla JS, no bundler) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script>
+    // ── Firebase Web configuration (public values — NOT server secrets) ──
+    // Real project values for the Ideathon Firebase project.
+    // NOTE: apiKey below is the Firebase Web API key (public, browser-safe config,
+    // not a service-account secret). It must be filled in from the Firebase
+    // Console (Project Settings -> Web app) before email/password login works.
+    const firebaseConfig = {
+      apiKey: "AIzaSyBO4YSBF_ttCNF_IjQXV-vGPt4-x7oqlNw",
+      authDomain: "shahdol-anganwadi-ai-dss.firebaseapp.com",
+      projectId: "shahdol-anganwadi-ai-dss",
+      storageBucket: "shahdol-anganwadi-ai-dss.firebasestorage.app",
+      messagingSenderId: "342302777107",
+      appId: "1:342302777107:web:208e6bd5dde609f40b44e6",
+    };
+    let firebaseReady = false;
+    try {
+      firebase.initializeApp(firebaseConfig);
+      firebaseReady = true;
+    } catch (e) {
+      console.warn("Firebase not configured (login disabled):", e.message);
+    }
+
+    async function getAuthToken() {
+      if (!firebaseReady) return null;
+      const user = firebase.auth().currentUser;
+      if (!user) return null;
+      try { return await user.getIdToken(false); } catch (e) { return null; }
+    }
+
+    async function authFetch(url, options = {}) {
+      const token = await getAuthToken();
+      const headers = { ...(options.headers || {}) };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      return fetch(url, { ...options, headers });
+    }
+
+    function showLogin() {
+      const overlay = document.getElementById('login-overlay');
+      if (overlay) overlay.classList.remove('hidden');
+    }
+    function hideLogin() {
+      const overlay = document.getElementById('login-overlay');
+      if (overlay) overlay.classList.add('hidden');
+    }
+
+    async function handleLogin() {
+      const email = document.getElementById('login-email').value;
+      const password = document.getElementById('login-password').value;
+      const btn = document.getElementById('login-btn');
+      const err = document.getElementById('login-error');
+      btn.disabled = true; btn.textContent = 'साइन इन हो रहा है…';
+      err.textContent = '';
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+        hideLogin();
+      } catch (e) {
+        err.textContent = e.message;
+      } finally {
+        btn.disabled = false; btn.textContent = 'साइन इन';
+      }
+    }
+
+    async function handleLogout() {
+      if (firebaseReady) await firebase.auth().signOut();
+      window.location.reload();
+    }
+
+    if (firebaseReady) {
+      firebase.auth().onAuthStateChanged(async (user) => {
+        if (user) {
+          hideLogin();
+          await loadDashboard();
+        } else {
+          showLogin();
+        }
+      });
+    } else {
+      // Firebase not configured — show dashboard content anyway (API calls will 401)
+      document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('login-overlay').classList.add('hidden');
+      });
+    }
+  </script>
+
+  <!-- Login Overlay -->
+  <div id="login-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-gov-900 via-gov-800 to-gov-700">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4">
+      <div class="text-center mb-6">
+        <div class="text-3xl mb-2">🏛️</div>
+        <h2 class="text-xl font-bold text-gov-800 hindi">जिला शहडोल आंगनवाड़ी डैशबोर्ड</h2>
+        <p class="text-sm text-slate-500 mt-1 hindi">कृपया लॉगिन करें (Officer Login)</p>
+      </div>
+      <div class="space-y-4">
+        <input id="login-email" type="email" placeholder="ईमेल (Email)" class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gov-500 text-sm" />
+        <input id="login-password" type="password" placeholder="पासवर्ड (Password)" class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gov-500 text-sm" />
+        <div id="login-error" class="text-red-600 text-sm hindi"></div>
+        <button id="login-btn" onclick="handleLogin()" class="w-full bg-gov-600 hover:bg-gov-700 text-white font-bold py-3 rounded-xl transition text-sm hindi">
+          साइन इन
+        </button>
+      </div>
+      <div class="mt-4 text-center">
+        <button onclick="handleLogout()" class="text-xs text-slate-400 hover:text-slate-600 underline">साइन आउट</button>
+      </div>
+    </div>
+  </div>
+
   <style>
     * { box-sizing: border-box; }
     body { font-family: 'Inter', sans-serif; background: #f0f4f8; }
@@ -121,6 +230,7 @@
       display: flex; align-items: center; justify-content: center;
       animation: fadeIn 0.2s ease;
     }
+    .modal-backdrop.hidden { display: none !important; }
     .modal-box {
       background: #fff;
       border-radius: 20px;
@@ -244,10 +354,18 @@
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <a href="/api/v1/reports/pdf?inline=true" target="_blank"
+        <a href="/ai-copilot"
+          class="bg-violet-500 hover:bg-violet-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 hindi">
+          🤖 AI Copilot
+        </a>
+        <button onclick="downloadReport('pdf')"
           class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 hindi">
           📄 शासकीय PDF रिपोर्ट
-        </a>
+        </button>
+        <button onclick="handleLogout()"
+          class="text-xs text-slate-400 hover:text-slate-600 underline hindi">
+          साइन आउट
+        </button>
       </div>
     </div>
 
@@ -625,7 +743,11 @@
     setInterval(() => loadDashboard(), 60000);
 
     // ─── Load dashboard on boot ───────────────────────────────────
-    window.addEventListener('DOMContentLoaded', loadDashboard);
+    // Dashboard load is gated by Firebase auth state (onAuthStateChanged).
+    // If Firebase is not configured, fall back to loading directly.
+    if (!firebaseReady) {
+      window.addEventListener('DOMContentLoaded', loadDashboard);
+    }
 
     async function loadDashboard() {
       await Promise.all([loadStats(), loadSubmissions()]);
@@ -638,7 +760,7 @@
         if (currentDate) params.append('date', currentDate);
         if (currentBlock) params.append('block_name', currentBlock);
 
-        const res = await fetch(`${API_BASE}/api/v1/dashboard/stats?${params}`);
+        const res = await authFetch(`${API_BASE}/api/v1/dashboard/stats?${params}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const d = await res.json();
 
@@ -687,7 +809,7 @@
         if (currentDate) params.append('date', currentDate);
         if (currentBlock) params.append('block_name', currentBlock);
 
-        const res = await fetch(`${API_BASE}/api/v1/dashboard/submissions?${params}`);
+        const res = await authFetch(`${API_BASE}/api/v1/dashboard/submissions?${params}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
@@ -896,7 +1018,7 @@
       };
 
       try {
-        const res = await fetch(`${API_BASE}/api/v1/dashboard/submissions/${currentSubmission.submission_id}/review`, {
+        const res = await authFetch(`${API_BASE}/api/v1/dashboard/submissions/${currentSubmission.submission_id}/review`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -1006,17 +1128,34 @@
       }, 3500);
     }
 
-    function downloadReport(format) {
+    async function downloadReport(format) {
       const params = new URLSearchParams();
       if (currentDate) params.append('date', currentDate);
       if (currentBlock) params.append('block_name', currentBlock);
       if (currentStatus) params.append('status', currentStatus);
-      
+
       const endpoint = format === 'pdf' ? '/api/v1/reports/pdf' : '/api/v1/reports/excel';
       const url = `${API_BASE}${endpoint}?${params.toString()}`;
-      
+
       showToast(`${format.toUpperCase()} डाउनलोड हो रहा है…`, 'info');
-      window.open(url, '_blank');
+      try {
+        const res = await authFetch(url);
+        if (!res.ok) {
+          showToast('अनधिकृत या डाउनलोड त्रुटि', 'error');
+          return;
+        }
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `Shahdol_AWC_Report.${format === 'pdf' ? 'pdf' : 'csv'}`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(a.href);
+        a.remove();
+      } catch (err) {
+        console.error('Report download failed:', err);
+        showToast('नेटवर्क त्रुटि। पुनः प्रयास करें।', 'error');
+      }
     }
 
     // Close modal on Escape key

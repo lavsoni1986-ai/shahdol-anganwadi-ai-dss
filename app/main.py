@@ -44,6 +44,7 @@ from app.database import check_db_health, get_db, init_db
 from app.models import DailySubmission, SubmissionStatus, WebhookLog
 from app.routers import dashboard as dashboard_router
 from app.routers import reports as reports_router
+from app.routers import assistant as assistant_router
 from app.services.ai_vision import process_image_ai_pipeline
 from app.schemas import (
     HealthResponse,
@@ -58,6 +59,7 @@ from app.services.whatsapp import (
     send_system_error_notice,
 )
 from app.services.worker_auth import authenticate_worker, reload_workers
+from app.services.firebase_auth import require_admin
 from app.utils.audit import generate_audit_id
 from app.utils.logger import configure_logging, get_logger
 
@@ -131,6 +133,7 @@ app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 # ── Register API Routers ──────────────────────────────────────────
 app.include_router(dashboard_router.router)
 app.include_router(reports_router.router)
+app.include_router(assistant_router.router)
 
 # Logger instance (after configure_logging is called in lifespan)
 logger = get_logger("app.main")
@@ -140,13 +143,64 @@ logger = get_logger("app.main")
 # Middleware
 # ─────────────────────────────────────────────
 
+def _resolve_cors(debug: bool, allowed_csv: str, app_public_url: str):
+    """
+    Returns (origins, use_wildcard, allow_credentials).
+
+    Production: explicit allowlist (CORS_ALLOWED_ORIGINS + APP_PUBLIC_URL),
+    never combined with credentials wildcard.
+    Debug: wildcard only when no explicit origins are configured; when wildcard
+    is used, credentials are disabled (browsers reject * + credentials anyway).
+    """
+    explicit = [o.strip() for o in (allowed_csv or "").split(",") if o.strip()]
+    if app_public_url:
+        explicit.append(str(app_public_url).rstrip("/"))
+    explicit = list(dict.fromkeys(explicit))
+
+    if not explicit and debug:
+        return ["*"], True, False
+    return explicit, False, True
+
+
+_cors_origins, _cors_wildcard, _cors_credentials = _resolve_cors(
+    settings.debug, settings.cors_allowed_origins, settings.app_public_url
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.debug else [],   # Restrict in production
-    allow_credentials=True,
+    allow_origins=["*"] if _cors_wildcard else _cors_origins,
+    allow_credentials=_cors_credentials,
     allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Production-safe security headers (CSP tuned for the existing Firebase Web SDK
+# + Tailwind CDN + inline-script architecture).
+_SECURITY_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.tailwindcss.com; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; "
+    "img-src 'self' data: blob:; "
+    "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com "
+    "https://www.googleapis.com https://firestore.googleapis.com; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'"
+)
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Adds production security headers; HSTS only on HTTPS."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Content-Security-Policy", _SECURITY_CSP)
+    if request.url.scheme == "https" or settings.app_public_url.startswith("https://"):
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
 
 
 @app.middleware("http")
@@ -353,7 +407,9 @@ async def health_check():
     summary="Reload Worker Master Data",
     tags=["System"],
 )
-async def api_reload_workers():
+async def api_reload_workers(
+    officer: dict = Depends(require_admin),
+):
     """Clears in-memory worker auth cache and reloads mock_workers.json from disk."""
     reload_workers()
     return {"status": "success", "message": "Worker master data reloaded successfully."}
@@ -459,19 +515,30 @@ async def receive_webhook(
     """
     received_at = datetime.now(timezone.utc)
     client_ip = request.client.host if request.client else None
-    meta_signature = request.headers.get("x-hub-signature-256")
 
-    # Diagnostic entry log (Step 6)
+    # Read raw body bytes FIRST (required for signature verification and cached for json parsing)
+    raw_body_bytes = await request.body()
+    meta_signature = request.headers.get("x-hub-signature-256", "")
+
+    # Optional: verify Meta's x-hub-signature-256 (production only)
+    if settings.whatsapp_signature_check_enabled:
+        from app.services.whatsapp import verify_meta_signature
+
+        if not verify_meta_signature(raw_body_bytes, meta_signature, settings.whatsapp_app_secret):
+            logger.warning("webhook_signature_rejected")
+            return JSONResponse(status_code=403, content={"status": "error", "detail": "Invalid signature"})
+
+    # Diagnostic entry log (Step 6) — never log the raw signature value
     logger.info(
         "WEBHOOK HIT",
         method=request.method,
         url=str(request.url),
         client_ip=client_ip,
-        meta_signature=meta_signature,
+        meta_signature_present=bool(meta_signature),
         content_type=request.headers.get("content-type"),
     )
 
-    # ── 1. Read raw body ─────────────────────
+    # ── 1. Parse JSON body (uses cached body from the raw read above) ──
     try:
         raw_body: Dict[str, Any] = await request.json()
     except Exception as e:
@@ -664,6 +731,29 @@ async def dashboard_panel(request: Request, db: AsyncSession = Depends(get_db)):
             "cdpo_name": ds.cdpo_name if ds else "N/A",
             "app_version": settings.app_version,
         },
+    )
+
+
+# ─────────────────────────────────────────────
+# GET /ai-copilot — AI Officer Copilot / Personal Journal
+# ─────────────────────────────────────────────
+
+@app.get(
+    "/ai-copilot",
+    summary="AI Officer Copilot — Personal AI Journal UI",
+    tags=["AI Assistant"],
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+async def ai_copilot_page(request: Request):
+    """
+    Serves the AI Officer Copilot / Personal Journal HTML panel.
+    The page is public (to load the login UI); all /api/v1/assistant/*
+    endpoints are protected by Firebase Authentication.
+    """
+    return templates.TemplateResponse(
+        "assistant.html",
+        {"request": request, "app_name": settings.app_name, "app_version": settings.app_version},
     )
 
 

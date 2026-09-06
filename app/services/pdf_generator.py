@@ -35,12 +35,19 @@ def _yes_no(val):
 _RENDER_LOCK = threading.Lock()
 
 def _encode_image(image_path, max_dim=640):
-    if not image_path or not Path(image_path).exists():
+    if not image_path:
         return ""
+    target_path = Path(image_path)
+    if not target_path.exists():
+        data_target = _APP_DIR.parent / "data" / image_path
+        if data_target.exists():
+            target_path = data_target
+        else:
+            return ""
     try:
         from PIL import Image
         import io
-        with Image.open(image_path) as img:
+        with Image.open(target_path) as img:
             # Convert RGBA to RGB for JPEG saving
             if img.mode in ("RGBA", "P"):
                 img = img.convert("RGB")

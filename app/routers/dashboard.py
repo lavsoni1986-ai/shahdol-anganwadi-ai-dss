@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models import DailySubmission, SubmissionStatus
+from app.services.firebase_auth import get_current_officer
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -183,6 +184,7 @@ def _date_utc_range(date_str: Optional[str] = None):
 )
 async def get_dashboard_stats(
     db: AsyncSession = Depends(get_db),
+    officer: dict = Depends(get_current_officer),
     date: Optional[str] = Query(None, description="Date filter YYYY-MM-DD"),
     block_name: Optional[str] = Query(None, description="Block name filter"),
 ) -> DashboardStats:
@@ -282,6 +284,7 @@ async def get_dashboard_stats(
 )
 async def list_submissions(
     db: AsyncSession = Depends(get_db),
+    officer: dict = Depends(get_current_officer),
     # --- Pagination ---
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(20, ge=1, le=100, description="Records per page (max 100)"),
@@ -460,6 +463,7 @@ async def review_submission(
     submission_id: str,
     review: ReviewRequest,
     db: AsyncSession = Depends(get_db),
+    officer: dict = Depends(get_current_officer),
 ) -> ReviewResponse:
     """
     Supervisor review action endpoint.
@@ -527,13 +531,42 @@ async def review_submission(
     submission.status = review.action          # APPROVED or FLAGGED
     submission.review_action = review.action
     submission.reviewed_at = reviewed_at
-    submission.reviewer_id = review.reviewer_id or "dashboard_officer"
-    submission.reviewer_name = review.reviewer_name or "District Officer"
+    # Authoritative reviewer identity comes from the verified Firebase token,
+    # never from the request body (reviewer_id/reviewer_name are ignored).
+    submission.reviewer_id = officer["uid"]
+    submission.reviewer_name = officer.get("name") or officer.get("email") or "Officer"
     submission.flag_reason = review.flag_reason
     submission.reviewer_remarks = review.remarks
     submission.updated_at = reviewed_at
 
     await db.commit()
+
+    # ── Best-effort Firestore audit write (user-isolated, non-blocking) ──
+    try:
+        from app.services.firestore_service import create_verification_audit
+        from datetime import timezone
+
+        audit_payload = {
+            "audit_id": submission.audit_id or submission.submission_id,
+            "submission_id": submission.submission_id,
+            "officer_uid": officer["uid"],
+            "officer_email": officer.get("email"),
+            "officer_name": submission.reviewer_name,
+            "action": review.action,
+            "status": submission.status,
+            "flag_reason": submission.flag_reason,
+            "remarks": submission.reviewer_remarks,
+            "ai_score": submission.ai_score,
+            "image_hash": submission.image_hash,
+            "awc_id": submission.awc_id,
+            "center_name": submission.center_name,
+            "block_name": submission.block_name,
+            "reviewed_at": reviewed_at.isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        create_verification_audit(audit_payload)
+    except Exception:
+        pass  # Firestore failure is logged inside create_verification_audit
 
     from zoneinfo import ZoneInfo
     ist = ZoneInfo("Asia/Kolkata")

@@ -4,21 +4,18 @@ import pathlib
 import uuid
 from typing import Optional, Dict, Any, List
 import cv2
-import urllib.request
-import logging
 
 try:
     from ultralytics import YOLO
 except ImportError:
     YOLO = None
 
+from app.config import settings
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 # Constants
-MODEL_FILENAME = "yolo11m.pt"
-MODEL_URL = f"https://github.com/ultralytics/assets/releases/download/v8.3.0/{MODEL_FILENAME}"
 MODEL_DIR = pathlib.Path("app/models")
 PROCESSED_DIR = pathlib.Path("data/processed")
 
@@ -37,22 +34,19 @@ class YoloDetectorService:
         return cls._instance
 
     def _initialize(self):
-        """Initializes the YOLO model as a singleton."""
+        """Initializes the YOLO model as a singleton using the configured path."""
         if YOLO is None:
             logger.warning("ultralytics_not_installed", msg="YOLO11 is not available.")
             return
 
-        model_path = MODEL_DIR / MODEL_FILENAME
-        
-        # Download model if not exists
+        # Resolve model path from settings/env (YOLO_MODEL_PATH); default app/models/yolo11m.pt
+        model_path = pathlib.Path(settings.yolo_model_path)
+
         if not model_path.exists():
-            logger.info("downloading_yolo_model", url=MODEL_URL, path=str(model_path))
-            try:
-                urllib.request.urlretrieve(MODEL_URL, str(model_path))
-                logger.info("yolo_model_downloaded_successfully")
-            except Exception as e:
-                logger.error("yolo_model_download_failed", error=str(e))
-                return
+            logger.error("yolo_model_not_found", path=str(model_path),
+                         msg="YOLO model file not found at configured path. "
+                             "In Docker, the model must be baked into the image at build time.")
+            return
 
         logger.info("yolo_model_loading", model_path=str(model_path))
         start_time = time.time()
@@ -200,6 +194,25 @@ class YoloDetectorService:
         except Exception as e:
             logger.error("yolo_inference_exception", error=str(e))
             return None
+
+    @staticmethod
+    def cleanup_visualized_image(visualized_image_path: Optional[str]) -> bool:
+        """
+        Safely removes an ephemeral visualized YOLO output file after downstream use.
+        Returns True if deleted, False otherwise.
+        """
+        if not visualized_image_path:
+            return False
+        try:
+            p = pathlib.Path(visualized_image_path)
+            if p.exists() and p.is_file():
+                p.unlink(missing_ok=True)
+                logger.debug("yolo_visualized_image_cleaned", path=visualized_image_path)
+                return True
+            return False
+        except Exception as e:
+            logger.warning("yolo_cleanup_failed", path=visualized_image_path, error=str(e))
+            return False
 
 # Singleton instance
 yolo_detector = YoloDetectorService()

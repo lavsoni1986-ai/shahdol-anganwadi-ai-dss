@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Officer Copilot — Shahdol Anganwadi DSS | BharatOS</title>
+  <meta name="description" content="Secure Personal AI Journal — Officer Copilot for District Shahdol Anganwadi DSS" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Tiro+Devanagari+Hindi&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter','sans-serif'], hindi: ['Tiro Devanagari Hindi','serif'] },
+      colors: { gov: { 50:'#eff6ff',100:'#dbeafe',200:'#bfdbfe',300:'#93c5fd',400:'#60a5fa',500:'#3b82f6',600:'#1a56db',700:'#1e3a8a',800:'#0f1f42',900:'#0b1a3a' } } } } };
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family:'Inter',sans-serif; background:#f0f4f8; }
+    .hindi { font-family:'Tiro Devanagari Hindi','Inter',serif; }
+    .gov-header { background: linear-gradient(135deg,#0f1f42 0%,#1e3a8a 45%,#1a56db 100%); }
+    .bubble-user { background:#1a56db; color:#fff; border-radius:16px 16px 4px 16px; }
+    .bubble-ai   { background:#ffffff; border:1px solid #e2e8f0; color:#0f172a; border-radius:16px 16px 16px 4px; }
+    #login-overlay { display: none; }
+    #login-overlay:not(.hidden) { display: flex; }
+  </style>
+</head>
+<body class="min-h-screen">
+  <!-- Firebase Web SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script>
+    // Real Firebase Web configuration (client-safe — NOT server secrets)
+        const firebaseConfig = {
+      apiKey: "AIzaSyBO4YSBF_ttCNF_IjQXV-vGPt4-x7oqlNw",
+      authDomain: "shahdol-anganwadi-ai-dss.firebaseapp.com",
+      projectId: "shahdol-anganwadi-ai-dss",
+      storageBucket: "shahdol-anganwadi-ai-dss.firebasestorage.app",
+      messagingSenderId: "342302777107",
+      appId: "1:342302777107:web:208e6bd5dde609f40b44e6",
+    };
+
+    let firebaseReady = false;
+    try { firebase.initializeApp(firebaseConfig); firebaseReady = true; } catch (e) { console.warn(e.message); }
+
+    async function getAuthToken() {
+      if (!firebaseReady) return null;
+      const u = firebase.auth().currentUser;
+      if (!u) return null;
+      try { return await u.getIdToken(false); } catch (e) { return null; }
+    }
+    async function authFetch(url, options = {}) {
+      const t = await getAuthToken();
+      const h = { ...(options.headers || {}) };
+      if (t) h['Authorization'] = 'Bearer ' + t;
+      return fetch(url, { ...options, headers: h });
+    }
+  </script>
+
+  <!-- Login Overlay -->
+  <div id="login-overlay" class="fixed inset-0 z-50 items-center justify-center bg-gradient-to-br from-gov-900 via-gov-800 to-gov-700">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4">
+      <div class="text-center mb-6">
+        <div class="text-3xl mb-2">🤖</div>
+        <h2 class="text-xl font-bold text-gov-800 hindi">AI Officer Copilot</h2>
+        <p class="text-sm text-slate-500 mt-1 hindi">कृपया लॉगिन करें</p>
+      </div>
+      <div class="space-y-4">
+        <input id="login-email" type="email" placeholder="ईमेल (Email)" class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gov-500 text-sm" />
+        <input id="login-password" type="password" placeholder="पासवर्ड (Password)" class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gov-500 text-sm" />
+        <div id="login-error" class="text-red-600 text-sm hindi"></div>
+        <button id="login-btn" onclick="handleLogin()" class="w-full bg-gov-600 hover:bg-gov-700 text-white font-bold py-3 rounded-xl transition text-sm hindi">साइन इन</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="gov-header text-white">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div>
+        <div class="text-[10px] uppercase tracking-widest text-blue-200">Shahdol Anganwadi AI DSS</div>
+        <h1 class="text-lg font-bold hindi">🤖 AI Officer Copilot — Personal AI Journal</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/dashboard" class="text-xs text-blue-200 hover:text-white underline hindi">← डैशबोर्ड</a>
+        <button onclick="handleLogout()" class="text-xs text-blue-200 hover:text-white underline hindi">साइन आउट</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <div class="max-w-7xl mx-auto px-4 py-4 flex gap-4" style="height: calc(100vh - 80px);">
+    <aside class="w-72 shrink-0 bg-white rounded-2xl shadow p-3 flex flex-col">
+      <button onclick="newConversation()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold py-2.5 rounded-xl transition hindi">
+        ➕ नई चर्चा (New)
+      </button>
+      <div id="conversation-list" class="mt-3 flex-1 overflow-y-auto space-y-1">
+        <div class="text-slate-400 text-xs text-center py-6 hindi">कोई चर्चा नहीं</div>
+      </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col bg-white rounded-2xl shadow overflow-hidden">
+      <div class="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+        <div>
+          <h2 id="chat-title" class="font-bold text-gov-800 hindi">नई चर्चा</h2>
+          <span id="chat-status" class="text-xs text-slate-400 hindi">नई चर्चा शुरू करें</span>
+        </div>
+        <button id="end-btn" onclick="endConversation()" class="hidden bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-4 py-2 rounded-xl transition hindi">
+          ⏹ चर्चा समाप्त करें
+        </button>
+      </div>
+
+      <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
+        <div class="text-center text-slate-400 text-sm py-10 hindi">
+          नमस्ते! मैं आपका AI Officer Copilot हूँ।<br/>
+          आंगनवाड़ी कार्य, भोजन वितरण, क्षेत्र अवलोकन, योजना या निर्णय समर्थन — किसी भी विषय पर चर्चा करें।
+        </div>
+      </div>
+
+      <div id="summary-panel" class="hidden border-t border-amber-200 bg-amber-50 px-4 py-3"></div>
+
+      <div class="border-t border-slate-200 p-3 flex gap-2">
+        <textarea id="message-input" rows="1" placeholder="अपना संदेश लिखें…" class="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gov-500 text-sm resize-none"></textarea>
+        <button id="send-btn" onclick="sendMessage()" class="bg-gov-600 hover:bg-gov-700 text-white font-bold px-5 rounded-xl transition text-sm">➤ भेजें</button>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
+
+  <script>
+    const API_BASE = '';
+    let currentConversationId = null;
+    let currentTitle = 'नई चर्चा';
+    let busy = false;
+
+    function showToast(msg, type='info') {
+      const c = document.getElementById('toast-container');
+      const t = document.createElement('div');
+      t.className = (type==='error' ? 'bg-red-500' : 'bg-gov-700') + ' text-white text-sm px-4 py-2 rounded-lg shadow';
+      t.textContent = msg;
+      c.appendChild(t);
+      setTimeout(() => t.remove(), 3000);
+    }
+    function showLogin() { document.getElementById('login-overlay').classList.remove('hidden'); }
+    function hideLogin() { document.getElementById('login-overlay').classList.add('hidden'); }
+
+    async function handleLogin() {
+      const email = document.getElementById('login-email').value;
+      const password = document.getElementById('login-password').value;
+      const btn = document.getElementById('login-btn');
+      btn.disabled = true; btn.textContent = 'साइन इन हो रहा है…';
+      try { await firebase.auth().signInWithEmailAndPassword(email, password); hideLogin(); }
+      catch (e) { document.getElementById('login-error').textContent = e.message; }
+      finally { btn.disabled = false; btn.textContent = 'साइन इन'; }
+    }
+    async function handleLogout() { await firebase.auth().signOut(); window.location.href = '/dashboard'; }
+
+    function setBusy(v) {
+      busy = v;
+      document.getElementById('send-btn').disabled = v;
+      document.getElementById('send-btn').textContent = v ? '…' : '➤ भेजें';
+    }
+    function addBubble(role, text) {
+      const m = document.getElementById('messages');
+      const d = document.createElement('div');
+      d.className = 'max-w-[80%] px-4 py-2.5 text-sm whitespace-pre-wrap ' + (role === 'user' ? 'bubble-user ml-auto' : 'bubble-ai');
+      d.textContent = text;
+      m.appendChild(d);
+      m.scrollTop = m.scrollHeight;
+    }
+
+    async function loadConversations() {
+      try {
+        const res = await authFetch(`${API_BASE}/api/v1/assistant/conversations`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const list = document.getElementById('conversation-list');
+        list.innerHTML = '';
+        if (!data.conversations || data.conversations.length === 0) {
+          list.innerHTML = '<div class="text-slate-400 text-xs text-center py-6 hindi">कोई चर्चा नहीं</div>';
+          return;
+        }
+        data.conversations.forEach(c => {
+          const btn = document.createElement('button');
+          btn.className = 'w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 text-sm flex flex-col gap-0.5';
+          const statusBadge = c.status === 'completed' ? '<span class="text-amber-500 text-[10px]">✓ समाप्त</span>' : '';
+          btn.innerHTML = '<span class="truncate font-medium text-gov-800">' + (c.title || 'नई चर्चा') + '</span>' +
+            '<span class="text-[10px] text-slate-400">' + (c.message_count || 0) + ' संदेश ' + statusBadge + '</span>';
+          btn.onclick = () => openConversation(c.conversation_id);
+          list.appendChild(btn);
+        });
+      } catch (e) { console.warn('loadConversations failed:', e); }
+    }
+
+    function newConversation() {
+      currentConversationId = null;
+      currentTitle = 'नई चर्चा';
+      document.getElementById('chat-title').textContent = 'नई चर्चा';
+      document.getElementById('chat-status').textContent = 'नई चर्चा शुरू करें';
+      document.getElementById('summary-panel').classList.add('hidden');
+      document.getElementById('summary-panel').innerHTML = '';
+      document.getElementById('end-btn').classList.add('hidden');
+      document.getElementById('messages').innerHTML = '<div class="text-center text-slate-400 text-sm py-10 hindi">नई चर्चा शुरू करें।</div>';
+    }
+
+    async function openConversation(id) {
+      try {
+        const res = await authFetch(`${API_BASE}/api/v1/assistant/conversations/${id}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        currentConversationId = id;
+        const conv = data.conversation;
+        currentTitle = conv.title || 'नई चर्चा';
+        document.getElementById('chat-title').textContent = currentTitle;
+        const m = document.getElementById('messages');
+        m.innerHTML = '';
+        (data.messages || []).forEach(msg => addBubble(msg.role === 'user' ? 'user' : 'assistant', msg.content));
+        if (conv.status === 'completed') {
+          document.getElementById('end-btn').classList.add('hidden');
+          document.getElementById('chat-status').textContent = 'समाप्त — सारांश देखें';
+          const hasPlan = conv.action_plan && (Array.isArray(conv.action_plan) ? conv.action_plan.length : Object.keys(conv.action_plan).length);
+          const hasInsights = Array.isArray(conv.field_insights) && conv.field_insights.length;
+          if (conv.summary || hasInsights || hasPlan) renderSummary(conv.summary, conv.field_insights, conv.action_plan);
+        } else {
+          document.getElementById('end-btn').classList.remove('hidden');
+          document.getElementById('chat-status').textContent = 'चालू चर्चा';
+        }
+      } catch (e) { showToast('चर्चा लोड करने में त्रुटि', 'error'); }
+    }
+
+    function renderSummary(summary, insights, plans) {
+      const p = document.getElementById('summary-panel');
+      p.classList.remove('hidden');
+      let html = '<div class="text-xs font-bold text-amber-700 hindi mb-1">📋 सारांश (Summary)</div>';
+
+      // Summary can be a string (legacy) or a structured object (Phase 5B)
+      if (typeof summary === 'string') {
+        html += '<p class="text-sm text-slate-700 whitespace-pre-wrap hindi">' + (summary || '—') + '</p>';
+      } else if (summary && typeof summary === 'object') {
+        if (summary.summary) html += '<p class="text-sm text-slate-700 whitespace-pre-wrap hindi">' + summary.summary + '</p>';
+        if (summary.key_observations && summary.key_observations.length) html += '<div class="text-xs text-slate-600 hindi mt-1"><b>मुख्य अवलोकन:</b> ' + summary.key_observations.join('; ') + '</div>';
+        if (summary.important_issues && summary.important_issues.length) html += '<div class="text-xs text-slate-600 hindi mt-1"><b>महत्वपूर्ण मुद्दे:</b> ' + summary.important_issues.join('; ') + '</div>';
+        if (summary.conclusions && summary.conclusions.length) html += '<div class="text-xs text-slate-600 hindi mt-1"><b>निष्कर्ष:</b> ' + summary.conclusions.join('; ') + '</div>';
+        if (summary.priority_items && summary.priority_items.length) html += '<div class="text-xs text-slate-600 hindi mt-1"><b>प्राथमिकताएँ:</b> ' + summary.priority_items.join('; ') + '</div>';
+        if (summary.relevant_context) html += '<div class="text-xs text-slate-600 hindi mt-1"><b>संदर्भ:</b> ' + summary.relevant_context + '</div>';
+      }
+
+      // Field insights (Phase 5B structured)
+      if (Array.isArray(insights) && insights.length) {
+        html += '<div class="text-xs font-bold text-amber-700 hindi mt-3 mb-1">🔍 क्षेत्र अंतर्दृष्टि (Field Insights)</div>';
+        insights.forEach((ins, i) => {
+          html += '<div class="text-xs text-slate-600 hindi mt-1"><b>' + (i + 1) + '. ' + (ins.issue || '') + '</b>';
+          if (ins.priority) html += ' [प्राथमिकता: ' + ins.priority + ']';
+          if (ins.affected_location) html += ' | 📍 ' + ins.affected_location;
+          html += '</div>';
+          if (ins.evidence_or_context) html += '<div class="text-xs text-slate-500 hindi ml-3">साक्ष्य: ' + ins.evidence_or_context + '</div>';
+          if (ins.why_it_matters) html += '<div class="text-xs text-slate-500 hindi ml-3">महत्व: ' + ins.why_it_matters + '</div>';
+        });
+      }
+
+      // Action plan: Phase 5B list of items, or legacy flat object
+      if (Array.isArray(plans) && plans.length) {
+        html += '<div class="text-xs font-bold text-amber-700 hindi mt-3 mb-1">🎯 कार्य योजना (Action Plan)</div>';
+        plans.forEach((pl, i) => {
+          html += '<div class="text-xs text-slate-600 hindi mt-1"><b>' + (i + 1) + '. ' + (pl.recommended_action || '') + '</b>';
+          if (pl.priority) html += ' [प्राथमिकता: ' + pl.priority + ']';
+          if (pl.responsible_level) html += ' | ' + pl.responsible_level;
+          html += '</div>';
+          if (pl.next_step) html += '<div class="text-xs text-slate-500 hindi ml-3">अगला कदम: ' + pl.next_step + '</div>';
+          if (pl.rationale) html += '<div class="text-xs text-slate-500 hindi ml-3">कारण: ' + pl.rationale + '</div>';
+        });
+      } else if (plans && !Array.isArray(plans) && Object.keys(plans).length) {
+        html += '<div class="text-xs font-bold text-amber-700 hindi mt-3 mb-1">🎯 कार्य योजना (Action Plan)</div>';
+        if (plans.key_observations) html += '<div class="text-xs text-slate-600 hindi"><b>अवलोकन:</b> ' + plans.key_observations.join('; ') + '</div>';
+        if (plans.risks_issues) html += '<div class="text-xs text-slate-600 hindi"><b>जोखिम:</b> ' + plans.risks_issues.join('; ') + '</div>';
+        if (plans.recommended_actions) html += '<div class="text-xs text-slate-600 hindi"><b>सुझाव:</b> ' + plans.recommended_actions.join('; ') + '</div>';
+        if (plans.priority) html += '<div class="text-xs text-slate-600 hindi"><b>प्राथमिकता:</b> ' + plans.priority + '</div>';
+        if (plans.suggested_next_step) html += '<div class="text-xs text-slate-600 hindi"><b>अगला कदम:</b> ' + plans.suggested_next_step + '</div>';
+      }
+      p.innerHTML = html;
+    }
+
+    async function sendMessage() {
+      if (busy) return;
+      const input = document.getElementById('message-input');
+      const content = input.value.trim();
+      if (!content) return;
+      addBubble('user', content);
+      input.value = '';
+      setBusy(true);
+      try {
+        if (!currentConversationId) {
+          const cr = await authFetch(`${API_BASE}/api/v1/assistant/conversations`, { method: 'POST' });
+          if (cr.ok) {
+            const cd = await cr.json();
+            currentConversationId = cd.conversation_id;
+            document.getElementById('end-btn').classList.remove('hidden');
+            document.getElementById('chat-status').textContent = 'चालू चर्चा';
+          } else { addBubble('assistant', '⚠️ चर्चा शुरू करने में त्रुटि'); return; }
+        }
+        const res = await authFetch(`${API_BASE}/api/v1/assistant/conversations/${currentConversationId}/messages`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }),
+        });
+        const data = await res.json();
+        if (!res.ok) { addBubble('assistant', '⚠️ ' + (data.detail || 'त्रुटि')); }
+        else {
+          addBubble('assistant', data.response);
+          if (currentTitle === 'नई चर्चा' && data.message_count <= 2) {
+            currentTitle = content.slice(0, 40);
+            document.getElementById('chat-title').textContent = currentTitle;
+          }
+        }
+      } catch (e) { addBubble('assistant', '⚠️ नेटवर्क त्रुटि'); }
+      finally { setBusy(false); }
+    }
+
+    async function endConversation() {
+      if (!currentConversationId) return;
+      setBusy(true);
+      addBubble('assistant', 'चर्चा समाप्त की जा रही है — सारांश तैयार हो रहा है…');
+      try {
+        const res = await authFetch(`${API_BASE}/api/v1/assistant/conversations/${currentConversationId}/end`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) { addBubble('assistant', '⚠️ ' + (data.detail || 'त्रुटि')); }
+        else if (data.summary_status === 'error') {
+          addBubble('assistant', '⚠️ ' + (data.message || 'सारांश तैयार नहीं हो सका।'));
+          document.getElementById('end-btn').classList.add('hidden');
+          document.getElementById('chat-status').textContent = 'समाप्त';
+          loadConversations();
+        }
+        else {
+          addBubble('assistant', '✅ चर्चा समाप्त — सारांश, अंतर्दृष्टि और कार्य योजना तैयार।');
+          renderSummary(data.summary, data.field_insights, data.action_plan);
+          document.getElementById('end-btn').classList.add('hidden');
+          document.getElementById('chat-status').textContent = 'समाप्त — सारांश देखें';
+          loadConversations();
+        }
+      } catch (e) { addBubble('assistant', '⚠️ नेटवर्क त्रुटि'); }
+      finally { setBusy(false); }
+    }
+
+    document.getElementById('message-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+
+    if (firebaseReady) {
+      firebase.auth().onAuthStateChanged((user) => {
+        if (user) { hideLogin(); loadConversations(); newConversation(); }
+        else { showLogin(); }
+      });
+    } else {
+      document.addEventListener('DOMContentLoaded', () => { showLogin(); });
+    }
+  </script>
+</body>
+</html>

@@ -24,6 +24,22 @@ logger = get_logger(__name__)
 # IST timezone for displaying local time in Hindi messages
 IST = ZoneInfo("Asia/Kolkata")
 
+
+def verify_meta_signature(raw_body: bytes, signature_header: str, app_secret: str) -> bool:
+    """
+    Verifies Meta's X-Hub-Signature-256 header against the RAW request body
+    using the WhatsApp App Secret (HMAC-SHA256).
+
+    Returns True only when the signature matches; never trusts the header alone.
+    """
+    import hashlib
+    import hmac
+
+    if not app_secret or not signature_header:
+        return False
+    expected = "sha256=" + hmac.new(app_secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(signature_header, expected)
+
 # HTTP timeout for WhatsApp API calls
 _API_TIMEOUT_SECONDS = 30.0   # Increased for document delivery reliability
 _DOC_TIMEOUT_SECONDS = 45.0   # Separate, higher timeout for document sends
@@ -358,15 +374,17 @@ async def download_and_save_whatsapp_media(
     media_id: str,
     submission_id: str,
     media_mime_type: Optional[str] = None,
+    awc_id: Optional[str] = None,
 ) -> dict:
     """
     Downloads image media from Meta Cloud API, validates size & image integrity via PIL,
-    prevents path traversal using pathlib, and saves to data/uploads/.
+    saves permanent evidence via storage service abstraction, and preserves local development fallback.
 
     Returns dict:
         {
             "success": bool,
             "local_path": str | None,
+            "storage_key": str | None,
             "sha256": str | None,
             "error": str | None,
             "file_size": int | None
@@ -375,12 +393,14 @@ async def download_and_save_whatsapp_media(
     import hashlib
     import io
     from PIL import Image
+    from app.services.storage import get_storage_service, build_evidence_key
 
     if not settings.is_whatsapp_configured:
         logger.warning("media_download_unconfigured", media_id=media_id)
         return {
             "success": False,
             "local_path": None,
+            "storage_key": None,
             "sha256": None,
             "error": "WhatsApp API credentials not configured",
             "file_size": None,
@@ -398,6 +418,7 @@ async def download_and_save_whatsapp_media(
                 return {
                     "success": False,
                     "local_path": None,
+                    "storage_key": None,
                     "sha256": None,
                     "error": f"Meta API error status {res.status_code}",
                     "file_size": None,
@@ -409,6 +430,7 @@ async def download_and_save_whatsapp_media(
                 return {
                     "success": False,
                     "local_path": None,
+                    "storage_key": None,
                     "sha256": None,
                     "error": "No download URL returned by Meta API",
                     "file_size": None,
@@ -420,6 +442,7 @@ async def download_and_save_whatsapp_media(
                 return {
                     "success": False,
                     "local_path": None,
+                    "storage_key": None,
                     "sha256": None,
                     "error": f"Media binary download failed (status {download_res.status_code})",
                     "file_size": None,
@@ -434,6 +457,7 @@ async def download_and_save_whatsapp_media(
                 return {
                     "success": False,
                     "local_path": None,
+                    "storage_key": None,
                     "sha256": None,
                     "error": f"File size ({file_size} bytes) exceeds maximum 5 MB limit",
                     "file_size": file_size,
@@ -443,6 +467,7 @@ async def download_and_save_whatsapp_media(
                 return {
                     "success": False,
                     "local_path": None,
+                    "storage_key": None,
                     "sha256": None,
                     "error": "Downloaded media file is empty (0 bytes)",
                     "file_size": 0,
@@ -458,6 +483,7 @@ async def download_and_save_whatsapp_media(
                 return {
                     "success": False,
                     "local_path": None,
+                    "storage_key": None,
                     "sha256": None,
                     "error": f"Corrupted image file: {str(e)}",
                     "file_size": file_size,
@@ -466,34 +492,37 @@ async def download_and_save_whatsapp_media(
             # 5. Compute SHA-256 Hash
             sha256_hash = hashlib.sha256(content_bytes).hexdigest()
 
-            # 6. Local Image Storage using pathlib (Prevent Path Traversal)
-            _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+            # 6. Storage through storage abstraction
             ext = ".png" if media_mime_type == "image/png" else ".jpg"
+            storage = get_storage_service()
+            evidence_key = build_evidence_key(awc_id or "UNKNOWN", submission_id, ext)
 
-            # Strict safe filename using pathlib
+            # Save in local uploads dir if local disk writable (preserves local dev workflows)
+            _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
             safe_filename = f"{Path(submission_id).name}{ext}"
             file_path = (_UPLOADS_DIR / safe_filename).resolve()
             base_dir = _UPLOADS_DIR.resolve()
 
             try:
                 file_path.relative_to(base_dir)
-            except ValueError:
-                logger.error("path_traversal_prevented", attempt_path=str(file_path))
-                return {
-                    "success": False,
-                    "local_path": None,
-                    "sha256": sha256_hash,
-                    "error": "Path traversal attempt blocked",
-                    "file_size": file_size,
-                }
+                file_path.write_bytes(content_bytes)
+            except Exception as write_err:
+                logger.debug("local_uploads_write_skipped", error=str(write_err))
 
-            # Write file
-            file_path.write_bytes(content_bytes)
-            logger.info("media_file_saved", path=str(file_path), file_size=file_size)
+            # Canonical storage upload (GCS in production, or data/evidence in local mode)
+            storage_key = await storage.upload_file(
+                content_bytes,
+                evidence_key,
+                content_type=media_mime_type or ("image/png" if ext == ".png" else "image/jpeg"),
+            )
+
+            local_result_path = str(file_path) if file_path.exists() else storage_key
+            logger.info("media_file_saved", key=storage_key, path=local_result_path, file_size=file_size)
 
             return {
                 "success": True,
-                "local_path": str(file_path),
+                "local_path": local_result_path,
+                "storage_key": storage_key,
                 "sha256": sha256_hash,
                 "error": None,
                 "file_size": file_size,
@@ -504,6 +533,7 @@ async def download_and_save_whatsapp_media(
         return {
             "success": False,
             "local_path": None,
+            "storage_key": None,
             "sha256": None,
             "error": f"Media download error: {str(e)}",
             "file_size": None,
@@ -568,10 +598,11 @@ async def send_whatsapp_document(
     filename: str,
     caption: Optional[str] = None,
     local_file_path: Optional[str] = None,
+    file_bytes: Optional[bytes] = None,
 ) -> dict:
     """
     Sends a document via WhatsApp Cloud API.
-    If local_file_path is provided, it uploads the file directly to Meta's /media API 
+    If file_bytes or local_file_path is provided, it uploads the file directly to Meta's /media API
     and sends via media_id, completely bypassing Reverse Proxy/Timeout issues!
 
     Reliability improvements (v2):
@@ -581,6 +612,7 @@ async def send_whatsapp_document(
     - Separate 45s timeout for document delivery
     - Captures & logs complete Meta error payloads
     - Never silently swallows exceptions
+    - Strips sensitive query params from logs
 
     Returns:
         dict: {success, message_id, error, meta_response, attempts}
@@ -595,25 +627,47 @@ async def send_whatsapp_document(
             "attempts": 0,
         }
 
+    # Safe URL for logging (never log signed URL query params/tokens)
+    safe_log_url = document_url.split("?")[0] if ("?" in document_url) else document_url
+
     # ── Step 0: Direct Media Upload (Bypasses Link Download Timeouts) ──
     media_id = None
-    if local_file_path and os.path.exists(local_file_path):
+    media_content: Optional[bytes] = None
+
+    if file_bytes:
+        media_content = file_bytes
+    elif local_file_path and os.path.exists(local_file_path):
+        try:
+            with open(local_file_path, "rb") as f:
+                media_content = f.read()
+        except Exception as read_err:
+            logger.debug("direct_file_read_failed", path=local_file_path, error=str(read_err))
+    elif local_file_path:
+        # Check storage abstraction
+        try:
+            from app.services.storage import get_storage_service
+            storage = get_storage_service()
+            if await storage.exists(local_file_path):
+                media_content = await storage.download_file(local_file_path)
+        except Exception as st_err:
+            logger.debug("storage_document_fetch_failed", key=local_file_path, error=str(st_err))
+
+    if media_content:
         media_api_url = f"{settings.whatsapp_api_base_url}/{settings.whatsapp_api_version}/{settings.whatsapp_phone_number_id}/media"
-        logger.info("uploading_media_directly_to_meta", path=local_file_path)
+        logger.info("uploading_media_directly_to_meta", filename=filename, size_bytes=len(media_content))
         try:
             async with httpx.AsyncClient(timeout=_DOC_TIMEOUT_SECONDS) as client:
-                with open(local_file_path, "rb") as f:
-                    upload_res = await client.post(
-                        media_api_url,
-                        data={"messaging_product": "whatsapp"},
-                        files={"file": (filename, f, "application/pdf")},
-                        headers={"Authorization": f"Bearer {settings.whatsapp_access_token}"},
-                    )
-                    if upload_res.status_code == 200:
-                        media_id = upload_res.json().get("id")
-                        logger.info("meta_media_upload_success", media_id=media_id)
-                    else:
-                        logger.error("meta_media_upload_failed", status=upload_res.status_code, response=upload_res.text)
+                upload_res = await client.post(
+                    media_api_url,
+                    data={"messaging_product": "whatsapp"},
+                    files={"file": (filename, media_content, "application/pdf")},
+                    headers={"Authorization": f"Bearer {settings.whatsapp_access_token}"},
+                )
+                if upload_res.status_code == 200:
+                    media_id = upload_res.json().get("id")
+                    logger.info("meta_media_upload_success", media_id=media_id)
+                else:
+                    logger.error("meta_media_upload_failed", status=upload_res.status_code, response=upload_res.text)
         except Exception as e:
             logger.error("meta_media_upload_exception", error=str(e))
 
@@ -624,7 +678,7 @@ async def send_whatsapp_document(
             logger.error(
                 "document_send_aborted_private_url",
                 to_phone=to_phone,
-                url=document_url,
+                url=safe_log_url,
             )
             return {
                 "success": False,
@@ -638,7 +692,7 @@ async def send_whatsapp_document(
         logger.info(
             "document_send_started",
             to_phone=to_phone,
-            document_url=document_url,
+            document_url=safe_log_url,
             filename=filename,
         )
 
@@ -647,7 +701,7 @@ async def send_whatsapp_document(
             logger.error(
                 "document_send_aborted_url_inaccessible",
                 to_phone=to_phone,
-                url=document_url,
+                url=safe_log_url,
                 reason=url_check.get("reason"),
             )
             return {
@@ -692,7 +746,7 @@ async def send_whatsapp_document(
                 max_retries=_MAX_RETRIES,
                 to_phone=to_phone,
                 api_url=api_url,
-                document_url=document_url,
+                document_url=safe_log_url,
                 filename=filename,
             )
 
