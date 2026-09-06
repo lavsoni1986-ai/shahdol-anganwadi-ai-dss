@@ -32,6 +32,7 @@ scratch/
 # Model Binary Weights
 *.pt
 *.pth
+!app/models/yolo11m.pt
 
 # Benchmark Real Dataset Artifacts (Child Privacy & Blind GT Isolation)
 benchmark/real_dataset/images/
