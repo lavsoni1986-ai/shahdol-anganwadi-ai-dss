@@ -43,6 +43,9 @@ benchmark/real_dataset/ground_truth.json
 *firebase-adminsdk*.json
 *credentials*.json
 
-
 # Runtime evidence - never commit
 /data/evidence/
+
+# Local dev leftovers (not part of Ideathon baseline)
+test_gemini.py
+test_migration.py
