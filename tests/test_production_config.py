@@ -63,6 +63,17 @@ def test_security_headers_present():
     assert "default-src 'self'" in csp
 
 
+def test_swagger_docs_csp_allows_required_assets():
+    from app.main import app
+
+    client = TestClient(app)
+    resp = client.get("/docs")
+    assert resp.status_code == 200
+    csp = resp.headers.get("content-security-policy", "")
+    assert "https://cdn.jsdelivr.net" in csp
+    assert "https://fastapi.tiangolo.com" in csp
+
+
 # ── 4. WhatsApp Meta signature verification ────────────────────────
 def _sig(raw: bytes, secret: str) -> str:
     return "sha256=" + hmac.new(secret.encode("utf-8"), raw, hashlib.sha256).hexdigest()
